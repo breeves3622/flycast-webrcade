@@ -26,7 +26,7 @@ RUN curl -L -o /tmp/emulatorjs.7z "https://github.com/EmulatorJS/EmulatorJS/rele
 # Explicitly download the minified emulator files (required by modern EmulatorJS)
 RUN curl -L -o /tmp/emulator.min.zip "https://cdn.emulatorjs.org/stable/data/emulator.min.zip" && \
     cd /app/server/data && \
-    unzip -o /tmp/emulator.min.zip && \
+    7z x -y /tmp/emulator.min.zip && \
     rm /tmp/emulator.min.zip
 
 # Download flycast-wasm core from nasomers release and rename to what EmulatorJS expects (flycast-legacy-wasm)
