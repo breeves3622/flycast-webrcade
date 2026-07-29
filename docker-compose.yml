@@ -6,7 +6,6 @@ services:
     container_name: flycast-webrcade
     ports:
       - "3333:3000"
-    environment:
-      # Use the provided Archive.org collection for ROMs
-      - ARCHIVE_ITEM_ID=sega-dreamcast-redump-collection
+    volumes:
+      - //MYCLOUD-0N3X91/Public/Games/Dreamcast/DreamcastCHD2020_0-O:/app/server/roms
     restart: unless-stopped

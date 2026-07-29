@@ -133,7 +133,7 @@ function App() {
       <div className="hero">
         <div className="hero-content">
           <h2>Dreamcast, Redefined.</h2>
-          <p>Stream your favorite classic games directly from the archive in your browser. Powered by WebAssembly and EmulatorJS.</p>
+          <p>Stream your favorite classic games instantly from your local network. Powered by WebAssembly and EmulatorJS.</p>
         </div>
       </div>
 
@@ -141,9 +141,9 @@ function App() {
         <h3>Available Titles</h3>
         
         {loading ? (
-          <div className="loading">Connecting to Archive.org...</div>
+          <div className="loading">Scanning local ROMs directory...</div>
         ) : games.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)' }}>No USA games (.chd, .cdi, .gdi) found in the configured Archive.org collection.</p>
+          <p style={{ color: 'var(--text-muted)' }}>No USA games (.chd, .cdi, .gdi) found in your local ROM directory.</p>
         ) : (
           <div className="games-row">
             {games.map((game, i) => (
