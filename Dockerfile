@@ -1,17 +1,17 @@
 # Stage 1: Build React Frontend
-FROM node:18-alpine AS frontend-builder
+FROM node:20 AS frontend-builder
 WORKDIR /app/client
 COPY client/package*.json ./
-RUN npm install
+RUN rm -f package-lock.json && npm install
 COPY client/ ./
 RUN npm run build
 
 # Stage 2: Build Node Backend & Download Dependencies
-FROM node:18-alpine AS backend
+FROM node:20 AS backend
 WORKDIR /app
 
 # Install tools for downloading dependencies
-RUN apk add --no-cache curl unzip git
+RUN apt-get update && apt-get install -y curl unzip git
 
 # Setup directories
 RUN mkdir -p /app/client/dist /app/server/data/cores /app/server/bios
@@ -34,7 +34,7 @@ RUN curl -L -o /app/server/bios/dc_boot.bin "https://archive.org/download/sega-d
 # Setup Node server
 WORKDIR /app/server
 COPY server/package*.json ./
-RUN npm install --production
+RUN rm -f package-lock.json && npm install --production
 COPY server/server.js ./
 
 # Copy built frontend from Stage 1
