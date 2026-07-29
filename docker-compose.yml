@@ -7,5 +7,13 @@ services:
     ports:
       - "3333:3000"
     volumes:
-      - //MYCLOUD-0N3X91/Public/Games/Dreamcast/DreamcastCHD2020_0-O:/app/server/roms
+      - rom-storage:/app/server/roms
     restart: unless-stopped
+
+volumes:
+  rom-storage:
+    driver: local
+    driver_opts:
+      type: cifs
+      device: "//10.80.1.50/Public/Games/Dreamcast/DreamcastCHD2020_0-O"
+      o: "addr=10.80.1.50,guest,sec=none,vers=3.0,file_mode=0777,dir_mode=0777"
