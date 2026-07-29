@@ -5,7 +5,43 @@ const fs = require('fs');
 const https = require('https');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
+
+// Enable CORS for development
+app.use(cors());
+
+// Custom BIOS packaging logic to pull from user's NAS mount if they provided them
+const romsBiosDir = path.join(__dirname, 'roms', 'bios');
+const destBiosDir = path.join(__dirname, 'bios');
+const { execSync } = require('child_process');
+
+try {
+  if (fs.existsSync(path.join(romsBiosDir, 'dc_boot.bin'))) {
+    console.log('Found user-provided BIOS files on NAS mount. Packaging them...');
+    execSync(`mkdir -p ${destBiosDir}/dc ${destBiosDir}/data`);
+    execSync(`cp "${romsBiosDir}/dc_boot.bin" "${destBiosDir}/"`);
+    // Flash bin is optional, ignore errors if missing
+    execSync(`cp "${romsBiosDir}/dc_flash.bin" "${destBiosDir}/" 2>/dev/null || true`);
+    
+    execSync(`cp "${destBiosDir}/dc_boot.bin" "${destBiosDir}/dc/"`);
+    execSync(`cp "${destBiosDir}/dc_flash.bin" "${destBiosDir}/dc/" 2>/dev/null || true`);
+    
+    execSync(`cp "${destBiosDir}/dc_boot.bin" "${destBiosDir}/data/"`);
+    execSync(`cp "${destBiosDir}/dc_flash.bin" "${destBiosDir}/data/" 2>/dev/null || true`);
+    
+    execSync(`cd "${destBiosDir}" && zip -r dc_bios.zip dc_boot.bin dc_flash.bin dc/ data/`);
+    console.log('Successfully packaged user-provided BIOS files.');
+  } else {
+    console.log('No user-provided BIOS files found on NAS mount. Falling back to default downloaded BIOS.');
+  }
+} catch (err) {
+  console.error('Error packaging user-provided BIOS files:', err.message);
+}
+
+// Ensure BIOS directory exists for express static (in case it wasn't built yet)
+if (!fs.existsSync(destBiosDir)) {
+    fs.mkdirSync(destBiosDir, { recursive: true });
+}
 
 // Required headers for SharedArrayBuffer
 const ISOLATION_HEADERS = {
