@@ -42,10 +42,12 @@ app.get('/api/games', (req, res) => {
         // Ignore stat errors
       }
 
+      const cleanName = f.replace(/\.[^/.]+$/, "");
       return {
-        name: f.replace(/\.[^/.]+$/, ""),
+        name: cleanName,
         filename: f,
         size: size,
+        thumbnailUrl: `https://thumbnails.libretro.com/Sega%20-%20Dreamcast/Named_Boxarts/${encodeURIComponent(cleanName)}.png`,
         // Direct link to the static route
         url: `/roms/${encodeURIComponent(f)}`
       };

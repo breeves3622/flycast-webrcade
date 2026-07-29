@@ -157,8 +157,13 @@ function App() {
                 }}
                 onMouseEnter={() => setFocusedIndex(i)}
               >
-                <h4>{game.name}</h4>
-                <p>{(game.size / (1024 * 1024)).toFixed(1)} MB</p>
+                <div className="game-art">
+                  <img src={game.thumbnailUrl} alt={game.name} loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />
+                </div>
+                <div className="game-info">
+                  <h4>{game.name}</h4>
+                  <p>{(game.size / (1024 * 1024)).toFixed(1)} MB</p>
+                </div>
                 <div className="play-icon">
                   <svg viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z" />
