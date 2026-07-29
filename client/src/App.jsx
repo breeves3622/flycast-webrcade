@@ -33,7 +33,7 @@ function App() {
     window.EJS_pathtodata = '/data/'; // Served by Express static or docker volume
     window.EJS_startOnLoaded = true;
     window.EJS_color = '#ff2a6d';
-    window.EJS_biosUrl = '/bios/dc_boot.bin'; // We expect this in the proxy
+    window.EJS_biosUrl = '/bios/dc_bios.zip'; // EmulatorJS extracts zips directly into RetroArch's /system folder
     
     const script = document.createElement('script');
     script.src = '/data/loader.js';
