@@ -31,8 +31,8 @@ app.get('/api/games', async (req, res) => {
     const response = await axios.get(archiveUrl);
     const files = response.data.files || [];
     
-    // Filter out only supported ROM types (.chd, .cdi, .gdi)
-    const games = files.filter(f => f.name.match(/\.(chd|cdi|gdi)$/i)).map(f => {
+    // Filter out only supported ROM types (.chd, .cdi, .gdi) and only USA region
+    const games = files.filter(f => f.name.match(/\.(chd|cdi|gdi)$/i) && f.name.includes('(USA)')).map(f => {
       return {
         name: f.name.replace(/\.[^/.]+$/, ""),
         filename: f.name,

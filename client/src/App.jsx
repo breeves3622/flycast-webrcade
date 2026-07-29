@@ -1,9 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 function App() {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeGame, setActiveGame] = useState(null);
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  
+  const gameRefs = useRef([]);
+  const lastInputTime = useRef(0);
 
   useEffect(() => {
     // Fetch games from our Node Express backend
@@ -31,9 +35,6 @@ function App() {
     window.EJS_color = '#ff2a6d';
     window.EJS_biosUrl = '/bios/dc_boot.bin'; // We expect this in the proxy
     
-    // Apply WebGL and EmulatorJS patches here if needed, similar to the demo
-    // For now, we inject the loader.js
-    
     const script = document.createElement('script');
     script.src = '/data/loader.js';
     script.id = 'ejs-loader';
@@ -45,6 +46,83 @@ function App() {
     // Reload page to clear EmulatorJS from memory since it mutates globals heavily
     window.location.reload();
   };
+
+  // Scroll focused element into view
+  useEffect(() => {
+    if (!activeGame && gameRefs.current[focusedIndex]) {
+      gameRefs.current[focusedIndex].scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center'
+      });
+    }
+  }, [focusedIndex, activeGame]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (activeGame) return; // Disable menu navigation while game is playing
+
+      if (e.key === 'ArrowRight') {
+        setFocusedIndex(prev => Math.min(prev + 1, games.length - 1));
+      } else if (e.key === 'ArrowLeft') {
+        setFocusedIndex(prev => Math.max(prev - 1, 0));
+      } else if (e.key === 'Enter') {
+        if (games.length > 0) {
+          launchGame(games[focusedIndex]);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeGame, games, focusedIndex]);
+
+  // Gamepad navigation (polling loop)
+  useEffect(() => {
+    let animationFrameId;
+
+    const pollGamepad = () => {
+      if (!activeGame) {
+        const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+        const gp = gamepads[0];
+
+        if (gp) {
+          const now = Date.now();
+          // 200ms debounce to prevent rapid firing
+          if (now - lastInputTime.current > 200) {
+            const axesX = gp.axes[0];
+            const dpadLeft = gp.buttons[14]?.pressed;
+            const dpadRight = gp.buttons[15]?.pressed;
+            const buttonA = gp.buttons[0]?.pressed;
+
+            let moved = false;
+
+            if (axesX > 0.5 || dpadRight) {
+              setFocusedIndex(prev => Math.min(prev + 1, games.length - 1));
+              moved = true;
+            } else if (axesX < -0.5 || dpadLeft) {
+              setFocusedIndex(prev => Math.max(prev - 1, 0));
+              moved = true;
+            } else if (buttonA) {
+              if (games.length > 0) {
+                launchGame(games[focusedIndex]);
+              }
+              moved = true;
+            }
+
+            if (moved) {
+              lastInputTime.current = now;
+            }
+          }
+        }
+      }
+
+      animationFrameId = requestAnimationFrame(pollGamepad);
+    };
+
+    animationFrameId = requestAnimationFrame(pollGamepad);
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [activeGame, games, focusedIndex]);
 
   return (
     <div className="app-container">
@@ -65,14 +143,19 @@ function App() {
         {loading ? (
           <div className="loading">Connecting to Archive.org...</div>
         ) : games.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)' }}>No compatible games (.chd, .cdi, .gdi) found in the configured Archive.org collection.</p>
+          <p style={{ color: 'var(--text-muted)' }}>No USA games (.chd, .cdi, .gdi) found in the configured Archive.org collection.</p>
         ) : (
           <div className="games-row">
             {games.map((game, i) => (
               <div 
                 key={i} 
-                className="game-card"
-                onClick={() => launchGame(game)}
+                ref={el => gameRefs.current[i] = el}
+                className={`game-card ${i === focusedIndex ? 'focused' : ''}`}
+                onClick={() => {
+                  setFocusedIndex(i);
+                  launchGame(game);
+                }}
+                onMouseEnter={() => setFocusedIndex(i)}
               >
                 <h4>{game.name}</h4>
                 <p>{(game.size / (1024 * 1024)).toFixed(1)} MB</p>

@@ -144,7 +144,8 @@ header h1 {
   transition: opacity 0.3s ease;
 }
 
-.game-card:hover {
+.game-card:hover,
+.game-card.focused {
   transform: translateY(-8px) scale(1.02);
   background: var(--bg-card-hover);
   border-color: var(--accent);
@@ -191,7 +192,8 @@ header h1 {
   margin-left: 3px;
 }
 
-.game-card:hover .play-icon {
+.game-card:hover .play-icon,
+.game-card.focused .play-icon {
   opacity: 1;
   transform: translateY(0);
 }
