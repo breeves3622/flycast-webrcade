@@ -79,6 +79,12 @@ app.get('/api/thumbnail', (req, res) => {
 // Serve ROM files natively with Express static (supports Range requests out of the box!)
 app.use('/roms', express.static(path.join(__dirname, 'roms')));
 
+// Provide a clean URL for EmulatorJS to bypass virtual filesystem parsing bugs
+app.use('/api/rom/:filename/game.:ext', (req, res, next) => {
+  req.url = '/' + encodeURIComponent(req.params.filename);
+  next();
+}, express.static(path.join(__dirname, 'roms')));
+
 // Serve EmulatorJS data and BIOS
 app.use('/data', express.static(path.join(__dirname, 'data')));
 app.use('/bios', express.static(path.join(__dirname, 'bios')));

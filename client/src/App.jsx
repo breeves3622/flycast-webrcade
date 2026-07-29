@@ -29,7 +29,10 @@ function App() {
     // Set up EmulatorJS Globals
     window.EJS_player = '#game-container';
     window.EJS_core = 'flycast';
-    window.EJS_gameUrl = game.url; // This points to our /proxy/:filename
+    // Extract the extension from the filename (e.g. 'chd' or 'cdi')
+    const ext = game.filename.split('.').pop();
+    // Use the rewrite route so the virtual filesystem always sees "game.ext", avoiding WASM parsing bugs with complex names
+    window.EJS_gameUrl = `/api/rom/${encodeURIComponent(game.filename)}/game.${ext}`;
     window.EJS_pathtodata = '/data/'; // Served by Express static or docker volume
     window.EJS_startOnLoaded = true;
     window.EJS_color = '#ff2a6d';

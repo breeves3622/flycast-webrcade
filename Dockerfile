@@ -35,10 +35,15 @@ RUN curl -L -o /app/server/data/cores/flycast-legacy-wasm.data "https://github.c
     curl -L -o /app/server/data/cores/flycast-legacy-wasm.wasm "https://github.com/nasomers/flycast-wasm/releases/download/v1.0.0/flycast_libretro.wasm"
 
 # Download Dreamcast BIOS files from archive.org and package into a zip for correct folder structure
-RUN curl -L -o /app/server/bios/dc/dc_boot.bin "https://archive.org/download/sega-dreamcast-bios/dc_boot.bin" && \
-    curl -L -o /app/server/bios/dc/dc_flash.bin "https://archive.org/download/sega-dreamcast-bios/dc_flash.bin" && \
+RUN mkdir -p /app/server/bios/dc /app/server/bios/data && \
+    curl -L -o /app/server/bios/dc_boot.bin "https://archive.org/download/sega-dreamcast-bios/dc_boot.bin" && \
+    curl -L -o /app/server/bios/dc_flash.bin "https://archive.org/download/sega-dreamcast-bios/dc_flash.bin" && \
+    cp /app/server/bios/dc_boot.bin /app/server/bios/dc/ && \
+    cp /app/server/bios/dc_flash.bin /app/server/bios/dc/ && \
+    cp /app/server/bios/dc_boot.bin /app/server/bios/data/ && \
+    cp /app/server/bios/dc_flash.bin /app/server/bios/data/ && \
     cd /app/server/bios && \
-    zip -r dc_bios.zip dc/
+    zip -r dc_bios.zip dc_boot.bin dc_flash.bin dc/ data/
 
 # Setup Node server
 WORKDIR /app/server
