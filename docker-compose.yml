@@ -5,7 +5,7 @@ services:
     build: .
     container_name: flycast-webrcade
     ports:
-      - "3000:3000"
+      - "3333:3000"
     environment:
       # Use the provided Archive.org collection for ROMs
       - ARCHIVE_ITEM_ID=sega-dreamcast-redump-collection
