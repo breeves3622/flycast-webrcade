@@ -97,7 +97,7 @@ app.use('/bios', express.static(path.join(__dirname, 'bios')));
 
 // Serve frontend in production
 app.use(express.static(path.join(__dirname, '../client/dist')));
-app.get('*', (req, res) => {
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
