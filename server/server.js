@@ -32,8 +32,8 @@ app.get('/api/games', (req, res) => {
       return res.status(500).json({ error: 'Failed to read local roms directory' });
     }
     
-    // Filter out only supported ROM types (.chd, .cdi, .gdi) and only USA region
-    const games = files.filter(f => f.match(/\.(chd|cdi|gdi)$/i) && f.includes('(USA)')).map(f => {
+    // Filter out only supported ROM types (.chd, .cdi, .gdi) and USA region
+    const games = files.filter(f => f.match(/\.(chd|cdi|gdi)$/i) && (f.includes('(USA)') || f.includes('(US)'))).map(f => {
       let size = 0;
       try {
         const stats = fs.statSync(path.join(romsDir, f));

@@ -143,7 +143,7 @@ function App() {
         {loading ? (
           <div className="loading">Scanning local ROMs directory...</div>
         ) : games.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)' }}>No USA games (.chd, .cdi, .gdi) found in your local ROM directory.</p>
+          <p style={{ color: 'var(--text-muted)' }}>No USA/US games (.chd, .cdi, .gdi) found in your local ROM directory.</p>
         ) : (
           <div className="games-row">
             {games.map((game, i) => (
