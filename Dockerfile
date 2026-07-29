@@ -11,21 +11,22 @@ FROM node:20 AS backend
 WORKDIR /app
 
 # Install tools for downloading dependencies
-RUN apt-get update && apt-get install -y curl unzip git
+RUN apt-get update && apt-get install -y curl unzip git p7zip-full
 
 # Setup directories
 RUN mkdir -p /app/client/dist /app/server/data/cores /app/server/bios
 
-# Download EmulatorJS data folder
-# We do a sparse checkout to just get the 'data' folder
-RUN git clone --depth 1 --filter=blob:none --sparse https://github.com/EmulatorJS/EmulatorJS.git /tmp/emulatorjs && \
-    cd /tmp/emulatorjs && \
-    git sparse-checkout set data && \
+# Download full EmulatorJS release
+RUN curl -L -o /tmp/emulatorjs.7z "https://github.com/EmulatorJS/EmulatorJS/releases/download/v4.2.3/4.2.3.7z" && \
+    cd /tmp && \
+    7z x emulatorjs.7z && \
     cp -r data/* /app/server/data/ && \
-    rm -rf /tmp/emulatorjs
+    rm -rf /tmp/emulatorjs.7z /tmp/data
 
-# Download flycast-wasm core from nasomers release
-RUN curl -L -o /app/server/data/cores/flycast-wasm.data "https://github.com/nasomers/flycast-wasm/releases/download/v1.0.0/flycast-wasm.data"
+# Download flycast-wasm core from nasomers release and rename to what EmulatorJS expects (flycast-legacy-wasm)
+RUN curl -L -o /app/server/data/cores/flycast-legacy-wasm.data "https://github.com/nasomers/flycast-wasm/releases/download/v1.0.0/flycast-wasm.data" && \
+    curl -L -o /app/server/data/cores/flycast-legacy-wasm.js "https://github.com/nasomers/flycast-wasm/releases/download/v1.0.0/flycast_libretro.js" && \
+    curl -L -o /app/server/data/cores/flycast-legacy-wasm.wasm "https://github.com/nasomers/flycast-wasm/releases/download/v1.0.0/flycast_libretro.wasm"
 
 # Download Dreamcast BIOS files from archive.org
 RUN curl -L -o /app/server/bios/dc_boot.bin "https://archive.org/download/sega-dreamcast-bios/dc_boot.bin" && \
