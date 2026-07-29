@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,13 +48,31 @@ app.get('/api/games', (req, res) => {
         name: cleanName,
         filename: f,
         size: size,
-        thumbnailUrl: `https://thumbnails.libretro.com/Sega%20-%20Dreamcast/Named_Boxarts/${encodeURIComponent(cleanName)}.png`,
+        thumbnailUrl: `/api/thumbnail?url=${encodeURIComponent(`https://thumbnails.libretro.com/Sega%20-%20Dreamcast/Named_Boxarts/${encodeURIComponent(cleanName)}.png`)}`,
         // Direct link to the static route
         url: `/roms/${encodeURIComponent(f)}`
       };
     });
 
     res.json(games);
+  });
+});
+
+// API: Proxy thumbnails to inject COEP headers
+app.get('/api/thumbnail', (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl) return res.status(400).send('URL required');
+  
+  https.get(targetUrl, (targetRes) => {
+    if (targetRes.headers['content-type']) {
+      res.setHeader('Content-Type', targetRes.headers['content-type']);
+    }
+    // Cache for 24 hours to reduce load
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    targetRes.pipe(res);
+  }).on('error', (err) => {
+    console.error('Thumbnail proxy error:', err.message);
+    res.status(500).send('Error');
   });
 });
 
