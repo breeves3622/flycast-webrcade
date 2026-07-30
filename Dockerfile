@@ -28,12 +28,12 @@ RUN curl -L -o /tmp/emulator.min.zip "https://cdn.emulatorjs.org/stable/data/emu
     cd /app/server/data && \
     7z x -y /tmp/emulator.min.zip && \
     rm /tmp/emulator.min.zip && \
-    sed -i 's/return\["ppsspp"\]\.includes/return\["ppsspp","flycast","flycast-legacy-wasm"\]\.includes/g' /app/server/data/emulator.min.js
+    sed -i 's/return\["ppsspp"\]\.includes/return\["ppsspp","flycast","flycast-wasm"\]\.includes/g' /app/server/data/emulator.min.js
 
-# Download flycast-wasm core from nasomers release and rename to what EmulatorJS expects (flycast-legacy-wasm)
-RUN curl -L -o /app/server/data/cores/flycast-legacy-wasm.data "https://github.com/nasomers/flycast-wasm/releases/download/v1.0.0/flycast-wasm.data" && \
-    curl -L -o /app/server/data/cores/flycast-legacy-wasm.js "https://github.com/nasomers/flycast-wasm/releases/download/v1.0.0/flycast_libretro.js" && \
-    curl -L -o /app/server/data/cores/flycast-legacy-wasm.wasm "https://github.com/nasomers/flycast-wasm/releases/download/v1.0.0/flycast_libretro.wasm"
+# Download flycast-wasm core from nasomers release and rename to what EmulatorJS expects (flycast-wasm)
+RUN curl -L -o /app/server/data/cores/flycast-wasm.data "https://github.com/nasomers/flycast-wasm/releases/download/v1.0.0/flycast-wasm.data" && \
+    curl -L -o /app/server/data/cores/flycast-wasm.js "https://github.com/nasomers/flycast-wasm/releases/download/v1.0.0/flycast_libretro.js" && \
+    curl -L -o /app/server/data/cores/flycast-wasm.wasm "https://github.com/nasomers/flycast-wasm/releases/download/v1.0.0/flycast_libretro.wasm"
 
 # Download Dreamcast BIOS files from archive.org and package into a zip for correct folder structure
 RUN mkdir -p /app/server/bios/dc /app/server/bios/data && \
