@@ -29,6 +29,7 @@ function App() {
     // Set up EmulatorJS Globals
     window.EJS_player = '#game-container';
     window.EJS_core = 'flycast';
+    window.EJS_threads = true;
     // Extract the extension from the filename (e.g. 'chd' or 'cdi')
     const ext = game.filename.split('.').pop();
     // Use the rewrite route so the virtual filesystem always sees "game.ext", avoiding WASM parsing bugs with complex names
