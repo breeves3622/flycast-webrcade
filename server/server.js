@@ -50,8 +50,15 @@ try {
         if (stat.isDirectory()) {
           findBiosFiles(fullPath, depth + 1);
         } else {
-          if (file.toLowerCase() === 'dc_boot.bin') foundBoot = fullPath;
-          if (file.toLowerCase() === 'dc_flash.bin') foundFlash = fullPath;
+          const lower = file.toLowerCase();
+          if (lower === 'dc_boot.bin' || lower === 'dc_boot.rom' || 
+             ((lower.includes('bios') || lower.includes('boot')) && (lower.endsWith('.bin') || lower.endsWith('.rom')))) {
+            foundBoot = fullPath;
+          }
+          if (lower === 'dc_flash.bin' || lower === 'dc_flash.rom' || 
+             (lower.includes('flash') && (lower.endsWith('.bin') || lower.endsWith('.rom')))) {
+            foundFlash = fullPath;
+          }
         }
       } catch (e) {}
     }
