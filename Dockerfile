@@ -28,7 +28,6 @@ RUN curl -L -o /tmp/emulator.min.zip "https://cdn.emulatorjs.org/stable/data/emu
     cd /app/server/data && \
     7z x -y /tmp/emulator.min.zip && \
     rm /tmp/emulator.min.zip && \
-    sed -i 's/"ppsspp","dosbox_pure"/"ppsspp","dosbox_pure","flycast","flycast-legacy-wasm"/g' /app/server/data/emulator.min.js && \
     sed -i 's/return\["ppsspp"\]\.includes/return\["ppsspp","flycast","flycast-legacy-wasm"\]\.includes/g' /app/server/data/emulator.min.js
 
 # Download flycast-wasm core from nasomers release and rename to what EmulatorJS expects (flycast-legacy-wasm)
