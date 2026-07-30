@@ -21,6 +21,8 @@ RUN curl -L -o /tmp/emulatorjs.7z "https://github.com/EmulatorJS/EmulatorJS/rele
     cd /tmp && \
     7z x emulatorjs.7z && \
     cp -r data/* /app/server/data/ && \
+    sed -i 's/"ppsspp","dosbox_pure"/"ppsspp","dosbox_pure","flycast"/g' /app/server/data/emulator.min.js && \
+    sed -i 's/return\["ppsspp"\]\.includes/return\["ppsspp","flycast"\]\.includes/g' /app/server/data/emulator.min.js && \
     rm -rf /tmp/emulatorjs.7z /tmp/data
 
 # Explicitly download the minified emulator files (required by modern EmulatorJS)
