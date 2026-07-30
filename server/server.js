@@ -7,42 +7,6 @@ const https = require('https');
 const app = express();
 const PORT = 3000;
 
-// Enable CORS for development
-app.use(cors());
-
-// Custom BIOS packaging logic to pull from user's NAS mount if they provided them
-const romsBiosDir = path.join(__dirname, 'roms', 'bios');
-const destBiosDir = path.join(__dirname, 'bios');
-const { execSync } = require('child_process');
-
-try {
-  if (fs.existsSync(path.join(romsBiosDir, 'dc_boot.bin'))) {
-    console.log('Found user-provided BIOS files on NAS mount. Packaging them...');
-    execSync(`mkdir -p ${destBiosDir}/dc ${destBiosDir}/data`);
-    execSync(`cp "${romsBiosDir}/dc_boot.bin" "${destBiosDir}/"`);
-    // Flash bin is optional, ignore errors if missing
-    execSync(`cp "${romsBiosDir}/dc_flash.bin" "${destBiosDir}/" 2>/dev/null || true`);
-    
-    execSync(`cp "${destBiosDir}/dc_boot.bin" "${destBiosDir}/dc/"`);
-    execSync(`cp "${destBiosDir}/dc_flash.bin" "${destBiosDir}/dc/" 2>/dev/null || true`);
-    
-    execSync(`cp "${destBiosDir}/dc_boot.bin" "${destBiosDir}/data/"`);
-    execSync(`cp "${destBiosDir}/dc_flash.bin" "${destBiosDir}/data/" 2>/dev/null || true`);
-    
-    execSync(`cd "${destBiosDir}" && zip -r dc_bios.zip dc_boot.bin dc_flash.bin dc/ data/`);
-    console.log('Successfully packaged user-provided BIOS files.');
-  } else {
-    console.log('No user-provided BIOS files found on NAS mount. Falling back to default downloaded BIOS.');
-  }
-} catch (err) {
-  console.error('Error packaging user-provided BIOS files:', err.message);
-}
-
-// Ensure BIOS directory exists for express static (in case it wasn't built yet)
-if (!fs.existsSync(destBiosDir)) {
-    fs.mkdirSync(destBiosDir, { recursive: true });
-}
-
 // Required headers for SharedArrayBuffer
 const ISOLATION_HEADERS = {
   'Cross-Origin-Opener-Policy': 'same-origin',
@@ -58,6 +22,69 @@ app.use((req, res, next) => {
   res.set(ISOLATION_HEADERS);
   next();
 });
+
+// Provide a clean URL for EmulatorJS to bypass virtual filesystem parsing bugs
+app.get('/api/rom/:filename/game.:ext', (req, res) => {
+  const filePath = path.join(__dirname, 'roms', req.params.filename);
+  res.sendFile(filePath);
+});
+
+// Custom BIOS packaging logic to pull from user's NAS mount if they provided them
+const destBiosDir = path.join(__dirname, 'bios');
+const romsDir = path.join(__dirname, 'roms');
+const { execSync } = require('child_process');
+
+try {
+  let foundBoot = null;
+  let foundFlash = null;
+  
+  // Recursively search for bios files (case-insensitive) up to 2 levels deep
+  function findBiosFiles(dir, depth) {
+    if (depth > 2) return;
+    if (!fs.existsSync(dir)) return;
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+      const fullPath = path.join(dir, file);
+      try {
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          findBiosFiles(fullPath, depth + 1);
+        } else {
+          if (file.toLowerCase() === 'dc_boot.bin') foundBoot = fullPath;
+          if (file.toLowerCase() === 'dc_flash.bin') foundFlash = fullPath;
+        }
+      } catch (e) {}
+    }
+  }
+  
+  findBiosFiles(romsDir, 0);
+
+  if (foundBoot) {
+    console.log(`Found user-provided BIOS files on NAS mount (${foundBoot}). Packaging them...`);
+    execSync(`mkdir -p ${destBiosDir}/dc ${destBiosDir}/data`);
+    execSync(`cp "${foundBoot}" "${destBiosDir}/dc_boot.bin"`);
+    
+    if (foundFlash) {
+      execSync(`cp "${foundFlash}" "${destBiosDir}/dc_flash.bin"`);
+    }
+    
+    execSync(`cp "${destBiosDir}/dc_boot.bin" "${destBiosDir}/dc/"`);
+    if (foundFlash) execSync(`cp "${destBiosDir}/dc_flash.bin" "${destBiosDir}/dc/"`);
+    
+    execSync(`cp "${destBiosDir}/dc_boot.bin" "${destBiosDir}/data/"`);
+    if (foundFlash) execSync(`cp "${destBiosDir}/dc_flash.bin" "${destBiosDir}/data/"`);
+    
+    const zipFiles = foundFlash ? "dc_boot.bin dc_flash.bin" : "dc_boot.bin";
+    execSync(`cd "${destBiosDir}" && zip -r dc_bios.zip ${zipFiles} dc/ data/`);
+    console.log('Successfully packaged user-provided BIOS files.');
+  } else {
+    console.log('No user-provided BIOS files found on NAS mount. Falling back to default downloaded BIOS.');
+  }
+} catch (err) {
+  console.error('Error packaging user-provided BIOS files:', err.message);
+}
+
+
 
 // API: Get Games from local directory
 app.get('/api/games', (req, res) => {
@@ -115,11 +142,7 @@ app.get('/api/thumbnail', (req, res) => {
 // Serve ROM files natively with Express static (supports Range requests out of the box!)
 app.use('/roms', express.static(path.join(__dirname, 'roms')));
 
-// Provide a clean URL for EmulatorJS to bypass virtual filesystem parsing bugs
-app.use('/api/rom/:filename/game.:ext', (req, res, next) => {
-  req.url = '/' + encodeURIComponent(req.params.filename);
-  next();
-}, express.static(path.join(__dirname, 'roms')));
+
 
 // Serve EmulatorJS data and BIOS
 app.use('/data', express.static(path.join(__dirname, 'data')));
