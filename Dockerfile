@@ -21,15 +21,15 @@ RUN curl -L -o /tmp/emulatorjs.7z "https://github.com/EmulatorJS/EmulatorJS/rele
     cd /tmp && \
     7z x emulatorjs.7z && \
     cp -r data/* /app/server/data/ && \
-    sed -i 's/"ppsspp","dosbox_pure"/"ppsspp","dosbox_pure","flycast"/g' /app/server/data/emulator.min.js && \
-    sed -i 's/return\["ppsspp"\]\.includes/return\["ppsspp","flycast"\]\.includes/g' /app/server/data/emulator.min.js && \
     rm -rf /tmp/emulatorjs.7z /tmp/data
 
 # Explicitly download the minified emulator files (required by modern EmulatorJS)
 RUN curl -L -o /tmp/emulator.min.zip "https://cdn.emulatorjs.org/stable/data/emulator.min.zip" && \
     cd /app/server/data && \
     7z x -y /tmp/emulator.min.zip && \
-    rm /tmp/emulator.min.zip
+    rm /tmp/emulator.min.zip && \
+    sed -i 's/"ppsspp","dosbox_pure"/"ppsspp","dosbox_pure","flycast","flycast-legacy-wasm"/g' /app/server/data/emulator.min.js && \
+    sed -i 's/return\["ppsspp"\]\.includes/return\["ppsspp","flycast","flycast-legacy-wasm"\]\.includes/g' /app/server/data/emulator.min.js
 
 # Download flycast-wasm core from nasomers release and rename to what EmulatorJS expects (flycast-legacy-wasm)
 RUN curl -L -o /app/server/data/cores/flycast-legacy-wasm.data "https://github.com/nasomers/flycast-wasm/releases/download/v1.0.0/flycast-wasm.data" && \
