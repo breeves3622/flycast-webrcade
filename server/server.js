@@ -21,8 +21,8 @@ app.use(cors());
 app.use((req, res, next) => {
   res.set(ISOLATION_HEADERS);
   
-  // Prevent caching of the React index.html so updates to the JS bundle are fetched immediately
-  if (req.path === '/' || req.path === '/index.html') {
+  // Prevent caching of the React index.html and Emulator Cores so updates to the JS bundle and binaries are fetched immediately
+  if (req.path === '/' || req.path === '/index.html' || req.path.startsWith('/data/cores/')) {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
