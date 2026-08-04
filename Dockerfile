@@ -39,8 +39,13 @@ RUN curl -L -o /app/server/data/cores/flycast-wasm.js "https://github.com/nasome
     cp flycast-wasm.js flycast-legacy-wasm.js && \
     cp flycast-wasm.wasm flycast-legacy-wasm.wasm && \
     cp flycast-wasm.data flycast-legacy-wasm.data && \
-    echo "if (typeof EJS_Runtime !== 'undefined') window.EJS_Runtime = EJS_Runtime;" >> /app/server/data/cores/flycast-wasm.js && \
-    echo "if (typeof EJS_Runtime !== 'undefined') window.EJS_Runtime = EJS_Runtime;" >> /app/server/data/cores/flycast-legacy-wasm.js
+    cp flycast-wasm.js flycast-thread-wasm.js && \
+    cp flycast-wasm.wasm flycast-thread-wasm.wasm && \
+    cp flycast-wasm.data flycast-thread-wasm.data && \
+    cp flycast-wasm.js flycast-thread-legacy-wasm.js && \
+    cp flycast-wasm.wasm flycast-thread-legacy-wasm.wasm && \
+    cp flycast-wasm.data flycast-thread-legacy-wasm.data && \
+    for f in *.js; do echo "if (typeof EJS_Runtime !== 'undefined') window.EJS_Runtime = EJS_Runtime;" >> "\$f"; done
 
 # Generate core report metadata expected by EmulatorJS
 RUN mkdir -p /app/server/data/cores/reports && \
