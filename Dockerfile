@@ -33,7 +33,11 @@ RUN curl -L -o /tmp/emulator.min.zip "https://cdn.emulatorjs.org/stable/data/emu
 # Download flycast-wasm core from nasomers release and rename to what EmulatorJS expects (flycast-wasm)
 RUN curl -L -o /app/server/data/cores/flycast-wasm.js "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.js" && \
     curl -L -o /app/server/data/cores/flycast-wasm.wasm "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.wasm" && \
-    touch /app/server/data/cores/flycast-wasm.data
+    touch /app/server/data/cores/flycast-wasm.data && \
+    cd /app/server/data/cores && \
+    cp flycast-wasm.js flycast-legacy-wasm.js && \
+    cp flycast-wasm.wasm flycast-legacy-wasm.wasm && \
+    cp flycast-wasm.data flycast-legacy-wasm.data
 
 # Download Dreamcast BIOS files from archive.org and package into a zip for correct folder structure
 RUN mkdir -p /app/server/bios/dc /app/server/bios/data && \
