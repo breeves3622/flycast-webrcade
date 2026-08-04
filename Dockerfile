@@ -11,7 +11,7 @@ FROM node:20 AS backend
 WORKDIR /app
 
 # Bust Docker layer cache for downloads on new commits
-ARG CACHE_DATE=2026-08-04-v17
+ARG CACHE_DATE=2026-08-04-v18
 
 # Install tools for downloading dependencies
 RUN apt-get update && apt-get install -y curl unzip git p7zip-full zip
@@ -30,9 +30,7 @@ RUN curl -L -o /tmp/emulatorjs.7z "https://github.com/EmulatorJS/EmulatorJS/rele
 RUN curl -L -o /tmp/emulator.min.zip "https://cdn.emulatorjs.org/stable/data/emulator.min.zip" && \
     cd /app/server/data && \
     7z x -y /tmp/emulator.min.zip && \
-    rm /tmp/emulator.min.zip && \
-    sed -i 's/requiresThreads(t){return.*.includes(t)}/requiresThreads(t){return false}/g' /app/server/data/emulator*.js && \
-    sed -i 's/requiresWebGL2(t){return.*.includes(t)}/requiresWebGL2(t){return true}/g' /app/server/data/emulator*.js
+    rm /tmp/emulator.min.zip
 
 # Download flycast-wasm core from nasomers release and rename to what EmulatorJS expects (flycast-wasm)
 RUN curl -L -o /app/server/data/cores/flycast-wasm.js "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.js" && \
