@@ -1,211 +1,135 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 function App() {
   const [games, setGames] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeGame, setActiveGame] = useState(null);
-  const [focusedIndex, setFocusedIndex] = useState(0);
-  
-  const gameRefs = useRef([]);
-  const lastInputTime = useRef(0);
+  const [selectedGame, setSelectedGame] = useState(null);
+  const [isBooting, setIsBooting] = useState(false);
+  const [status, setStatus] = useState('Loading game list...');
 
   useEffect(() => {
-    // Fetch games from our Node Express backend
     fetch('/api/games')
       .then(res => res.json())
       .then(data => {
         setGames(data);
-        setLoading(false);
+        if (data.length > 0) {
+          setSelectedGame(data[0]);
+          setStatus(`Ready to boot: ${data[0].name}`);
+        } else {
+          setStatus('No games found in local ROM directory.');
+        }
       })
-      .catch(err => {
-        console.error('Failed to load games:', err);
-        setLoading(false);
-      });
+      .catch(err => setStatus(`Error fetching games: ${err.message}`));
   }, []);
 
-  const launchGame = (game) => {
-    setActiveGame(game);
-    
-    // Set up EmulatorJS Globals
+  const bootTestGame = () => {
+    if (!selectedGame) return;
+    setIsBooting(true);
+    setStatus(`Booting ${selectedGame.name}... Please wait.`);
+
+    // Set up clean EmulatorJS configuration
     window.EJS_player = '#game-container';
     window.EJS_core = 'flycast';
-    // Extract the extension from the filename (e.g. 'chd' or 'cdi')
-    const ext = game.filename.split('.').pop();
-    // Use the rewrite route so the virtual filesystem always sees "game.ext", avoiding WASM parsing bugs with complex names
-    window.EJS_gameUrl = `/api/rom/${encodeURIComponent(game.filename)}/game.${ext}`;
-    window.EJS_pathtodata = '/data/'; // Served by Express static or docker volume
+    const ext = selectedGame.filename.split('.').pop();
+    window.EJS_gameUrl = `/api/rom/${encodeURIComponent(selectedGame.filename)}/game.${ext}`;
+    window.EJS_pathtodata = '/data/';
     window.EJS_startOnLoaded = true;
     window.EJS_color = '#ff2a6d';
     window.EJS_threads = true;
-    // Use a cache buster for the BIOS URL to ensure the browser doesn't serve the old corrupted zip from memory cache
-    window.EJS_biosUrl = '/bios/dc_bios.zip?v=3'; // EmulatorJS extracts zips directly into RetroArch's /system folder
+    window.EJS_biosUrl = '/bios/dc_bios.zip?v=3';
 
-    // Inject Flycast WASM tuned core options to prevent silent hangs (specifically threaded rendering and HLE bios)
     window.EJS_defaultOptions = {
       'reicast_boot_to_bios': 'disabled',
       'reicast_hle_bios': 'disabled',
       'reicast_threaded_rendering': 'disabled',
       'reicast_synchronous_rendering': 'disabled',
-      'reicast_internal_resolution': '640x480',
-      'reicast_mipmapping': 'disabled',
-      'reicast_anisotropic_filtering': '1',
-      'reicast_texupscale': 'disabled',
-      'reicast_enable_rttb': 'disabled',
-      'reicast_enable_purupuru': 'disabled',
-      'reicast_alpha_sorting': 'per-strip (fast, least accurate)',
-      'reicast_delay_frame_swapping': 'disabled',
-      'reicast_frame_skipping': 'enabled',
-      'reicast_framerate': 'normal'
+      'reicast_internal_resolution': '640x480'
     };
-    
+
     const script = document.createElement('script');
     script.src = '/data/loader.js';
     script.id = 'ejs-loader';
+    script.onload = () => setStatus('Emulator engine loaded into DOM.');
+    script.onerror = () => setStatus('Failed to load /data/loader.js');
     document.body.appendChild(script);
   };
 
-  const closeEmulator = () => {
-    setActiveGame(null);
-    // Reload page to clear EmulatorJS from memory since it mutates globals heavily
-    window.location.reload();
-  };
-
-  // Scroll focused element into view
-  useEffect(() => {
-    if (!activeGame && gameRefs.current[focusedIndex]) {
-      gameRefs.current[focusedIndex].scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-        inline: 'center'
-      });
-    }
-  }, [focusedIndex, activeGame]);
-
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (activeGame) return; // Disable menu navigation while game is playing
-
-      if (e.key === 'ArrowRight') {
-        setFocusedIndex(prev => Math.min(prev + 1, games.length - 1));
-      } else if (e.key === 'ArrowLeft') {
-        setFocusedIndex(prev => Math.max(prev - 1, 0));
-      } else if (e.key === 'Enter') {
-        if (games.length > 0) {
-          launchGame(games[focusedIndex]);
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeGame, games, focusedIndex]);
-
-  // Gamepad navigation (polling loop)
-  useEffect(() => {
-    let animationFrameId;
-
-    const pollGamepad = () => {
-      if (!activeGame) {
-        const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-        const gp = gamepads[0];
-
-        if (gp) {
-          const now = Date.now();
-          // 200ms debounce to prevent rapid firing
-          if (now - lastInputTime.current > 200) {
-            const axesX = gp.axes[0];
-            const dpadLeft = gp.buttons[14]?.pressed;
-            const dpadRight = gp.buttons[15]?.pressed;
-            const buttonA = gp.buttons[0]?.pressed;
-
-            let moved = false;
-
-            if (axesX > 0.5 || dpadRight) {
-              setFocusedIndex(prev => Math.min(prev + 1, games.length - 1));
-              moved = true;
-            } else if (axesX < -0.5 || dpadLeft) {
-              setFocusedIndex(prev => Math.max(prev - 1, 0));
-              moved = true;
-            } else if (buttonA) {
-              if (games.length > 0) {
-                launchGame(games[focusedIndex]);
-              }
-              moved = true;
-            }
-
-            if (moved) {
-              lastInputTime.current = now;
-            }
-          }
-        }
-      }
-
-      animationFrameId = requestAnimationFrame(pollGamepad);
-    };
-
-    animationFrameId = requestAnimationFrame(pollGamepad);
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [activeGame, games, focusedIndex]);
-
   return (
-    <div className="app-container">
-      <header>
-        <h1>Flycast Arcade</h1>
-      </header>
-
-      <div className="hero">
-        <div className="hero-content">
-          <h2>Dreamcast, Redefined.</h2>
-          <p>Stream your favorite classic games instantly from your local network. Powered by WebAssembly and EmulatorJS.</p>
-        </div>
+    <div style={{
+      padding: '40px',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      backgroundColor: '#111',
+      color: '#fff',
+      minHeight: '100vh',
+      boxSizing: 'border-box'
+    }}>
+      <h1 style={{ marginTop: 0, color: '#ff2a6d' }}>Flycast WASM Test Runner</h1>
+      <p style={{ color: '#aaa', fontSize: '14px' }}>Minimal diagnostic boot test for Sega Dreamcast WebAssembly core.</p>
+      
+      <div style={{ margin: '20px 0', padding: '15px', backgroundColor: '#222', borderRadius: '8px', border: '1px solid #333' }}>
+        <strong>Status: </strong> <span>{status}</span>
       </div>
 
-      <div className="games-section">
-        <h3>Available Titles</h3>
-        
-        {loading ? (
-          <div className="loading">Scanning local ROMs directory...</div>
-        ) : games.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)' }}>No USA/US games (.chd, .cdi, .gdi) found in your local ROM directory.</p>
-        ) : (
-          <div className="games-row">
-            {games.map((game, i) => (
-              <div 
-                key={i} 
-                ref={el => gameRefs.current[i] = el}
-                className={`game-card ${i === focusedIndex ? 'focused' : ''}`}
-                onClick={() => {
-                  setFocusedIndex(i);
-                  launchGame(game);
-                }}
-                onMouseEnter={() => setFocusedIndex(i)}
-              >
-                <div className="game-art">
-                  <img src={game.thumbnailUrl} alt={game.name} loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />
-                </div>
-                <div className="game-info">
-                  <h4>{game.name}</h4>
-                  <p>{(game.size / (1024 * 1024)).toFixed(1)} MB</p>
-                </div>
-                <div className="play-icon">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                </div>
-              </div>
+      {games.length > 0 && (
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>Select Game: </label>
+          <select 
+            value={selectedGame ? selectedGame.filename : ''} 
+            onChange={(e) => {
+              const g = games.find(x => x.filename === e.target.value);
+              setSelectedGame(g);
+              setStatus(`Ready to boot: ${g.name}`);
+            }}
+            disabled={isBooting}
+            style={{
+              padding: '10px 15px',
+              fontSize: '16px',
+              backgroundColor: '#333',
+              color: '#fff',
+              border: '1px solid #444',
+              borderRadius: '6px',
+              width: '100%',
+              maxWidth: '500px'
+            }}
+          >
+            {games.map((g, i) => (
+              <option key={i} value={g.filename}>
+                {g.name} ({(g.size / (1024 * 1024)).toFixed(1)} MB)
+              </option>
             ))}
-          </div>
-        )}
-      </div>
-
-      {activeGame && (
-        <div className="emulator-overlay">
-          <button className="emulator-close" onClick={closeEmulator}>
-            &times;
-          </button>
-          <div id="game-container"></div>
+          </select>
         </div>
       )}
+
+      {!isBooting && selectedGame && (
+        <button 
+          onClick={bootTestGame}
+          style={{
+            padding: '14px 28px',
+            fontSize: '18px',
+            fontWeight: 'bold',
+            backgroundColor: '#ff2a6d',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer'
+          }}
+        >
+          ► BOOT TEST GAME
+        </button>
+      )}
+
+      <div 
+        id="game-container" 
+        style={{ 
+          marginTop: '30px', 
+          width: '640px', 
+          height: '480px', 
+          backgroundColor: '#000', 
+          border: '2px solid #333',
+          borderRadius: '8px',
+          overflow: 'hidden'
+        }}
+      ></div>
     </div>
   );
 }
