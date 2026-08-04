@@ -37,67 +37,7 @@ app.get('/api/rom/:filename/game.:ext', (req, res) => {
   res.sendFile(filePath);
 });
 
-// Custom BIOS packaging logic to pull from user's NAS mount if they provided them
-const destBiosDir = path.join(__dirname, 'bios');
-const romsDir = path.join(__dirname, 'roms');
-const { execSync } = require('child_process');
-
-try {
-  let foundBoot = null;
-  let foundFlash = null;
-  
-  // Recursively search for bios files (case-insensitive) up to 2 levels deep
-  function findBiosFiles(dir, depth) {
-    if (depth > 2) return;
-    if (!fs.existsSync(dir)) return;
-    const files = fs.readdirSync(dir);
-    for (const file of files) {
-      const fullPath = path.join(dir, file);
-      try {
-        const stat = fs.statSync(fullPath);
-        if (stat.isDirectory()) {
-          findBiosFiles(fullPath, depth + 1);
-        } else {
-          const lower = file.toLowerCase();
-          if (lower === 'dc_boot.bin' || lower === 'dc_boot.rom' || 
-             ((lower.includes('bios') || lower.includes('boot')) && (lower.endsWith('.bin') || lower.endsWith('.rom')))) {
-            foundBoot = fullPath;
-          }
-          if (lower === 'dc_flash.bin' || lower === 'dc_flash.rom' || 
-             (lower.includes('flash') && (lower.endsWith('.bin') || lower.endsWith('.rom')))) {
-            foundFlash = fullPath;
-          }
-        }
-      } catch (e) {}
-    }
-  }
-  
-  findBiosFiles(romsDir, 0);
-
-  if (foundBoot) {
-    console.log(`Found user-provided BIOS files on NAS mount (${foundBoot}). Packaging them...`);
-    execSync(`mkdir -p ${destBiosDir}/dc ${destBiosDir}/data`);
-    execSync(`cp "${foundBoot}" "${destBiosDir}/dc_boot.bin"`);
-    
-    if (foundFlash) {
-      execSync(`cp "${foundFlash}" "${destBiosDir}/dc_flash.bin"`);
-    }
-    
-    execSync(`cp "${destBiosDir}/dc_boot.bin" "${destBiosDir}/dc/"`);
-    if (foundFlash) execSync(`cp "${destBiosDir}/dc_flash.bin" "${destBiosDir}/dc/"`);
-    
-    execSync(`cp "${destBiosDir}/dc_boot.bin" "${destBiosDir}/data/"`);
-    if (foundFlash) execSync(`cp "${destBiosDir}/dc_flash.bin" "${destBiosDir}/data/"`);
-    
-    const zipFiles = foundFlash ? "dc_boot.bin dc_flash.bin" : "dc_boot.bin";
-    execSync(`cd "${destBiosDir}" && zip -r dc_bios.zip ${zipFiles} dc/ data/`);
-    console.log('Successfully packaged user-provided BIOS files.');
-  } else {
-    console.log('No user-provided BIOS files found on NAS mount. Falling back to default downloaded BIOS.');
-  }
-} catch (err) {
-  console.error('Error packaging user-provided BIOS files:', err.message);
-}
+// Custom BIOS packaging logic removed - we now strictly use the verified archive.org BIOS downloaded in the Dockerfile
 
 
 
