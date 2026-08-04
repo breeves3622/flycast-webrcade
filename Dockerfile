@@ -38,7 +38,14 @@ RUN curl -L -o /app/server/data/cores/flycast-wasm.js "https://github.com/nasome
     cd /app/server/data/cores && \
     cp flycast-wasm.js flycast-legacy-wasm.js && \
     cp flycast-wasm.wasm flycast-legacy-wasm.wasm && \
-    cp flycast-wasm.data flycast-legacy-wasm.data
+    cp flycast-wasm.data flycast-legacy-wasm.data && \
+    echo "if (typeof EJS_Runtime !== 'undefined') window.EJS_Runtime = EJS_Runtime;" >> /app/server/data/cores/flycast-wasm.js && \
+    echo "if (typeof EJS_Runtime !== 'undefined') window.EJS_Runtime = EJS_Runtime;" >> /app/server/data/cores/flycast-legacy-wasm.js
+
+# Generate core report metadata expected by EmulatorJS
+RUN mkdir -p /app/server/data/cores/reports && \
+    echo '{"name":"flycast","extensions":["cdi","gdi","chd","cue","iso"],"options":{"defaultWebGL2":true}}' > /app/server/data/cores/reports/flycast.json && \
+    echo '{"name":"flycast","extensions":["cdi","gdi","chd","cue","iso"],"options":{"defaultWebGL2":true}}' > /app/server/data/cores/reports/flycast-wasm.json
 
 # Download Dreamcast BIOS files from archive.org and package into a zip for correct folder structure
 RUN mkdir -p /app/server/bios/dc /app/server/bios/data && \
