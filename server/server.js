@@ -20,6 +20,14 @@ app.use(cors());
 // Apply headers to all requests
 app.use((req, res, next) => {
   res.set(ISOLATION_HEADERS);
+  
+  // Prevent caching of the React index.html so updates to the JS bundle are fetched immediately
+  if (req.path === '/' || req.path === '/index.html') {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  
   next();
 });
 
