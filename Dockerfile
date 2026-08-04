@@ -10,6 +10,9 @@ RUN npm run build
 FROM node:20 AS backend
 WORKDIR /app
 
+# Bust Docker layer cache for downloads on new commits
+ARG CACHE_DATE=2026-08-04-v17
+
 # Install tools for downloading dependencies
 RUN apt-get update && apt-get install -y curl unzip git p7zip-full zip
 
