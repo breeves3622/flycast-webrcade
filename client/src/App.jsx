@@ -36,6 +36,7 @@ function App() {
     window.EJS_pathtodata = '/data/'; // Served by Express static or docker volume
     window.EJS_startOnLoaded = true;
     window.EJS_color = '#ff2a6d';
+    window.EJS_threads = false;
     // Use a cache buster for the BIOS URL to ensure the browser doesn't serve the old corrupted zip from memory cache
     window.EJS_biosUrl = '/bios/dc_bios.zip?v=3'; // EmulatorJS extracts zips directly into RetroArch's /system folder
 

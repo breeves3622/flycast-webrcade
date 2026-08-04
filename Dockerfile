@@ -28,7 +28,8 @@ RUN curl -L -o /tmp/emulator.min.zip "https://cdn.emulatorjs.org/stable/data/emu
     cd /app/server/data && \
     7z x -y /tmp/emulator.min.zip && \
     rm /tmp/emulator.min.zip && \
-    node -e "const fs = require('fs'); ['/app/server/data/emulator.min.js', '/app/server/data/emulator.js'].forEach(f => { if (fs.existsSync(f)) { let code = fs.readFileSync(f, 'utf8'); code = code.replace(/requiresWebGL2\(([^)]*)\)\s*\{\s*return\s*\[\"ppsspp\"\]/g, 'requiresWebGL2(\$1){return[\"ppsspp\",\"flycast\",\"flycast-wasm\"]'); fs.writeFileSync(f, code); } });"
+    sed -i 's/requiresThreads(t){return.*.includes(t)}/requiresThreads(t){return false}/g' /app/server/data/emulator*.js && \
+    sed -i 's/requiresWebGL2(t){return.*.includes(t)}/requiresWebGL2(t){return true}/g' /app/server/data/emulator*.js
 
 # Download flycast-wasm core from nasomers release and rename to what EmulatorJS expects (flycast-wasm)
 RUN curl -L -o /app/server/data/cores/flycast-wasm.js "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.js" && \
