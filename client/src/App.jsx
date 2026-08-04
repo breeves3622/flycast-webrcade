@@ -39,6 +39,24 @@ function App() {
     // Use a cache buster for the BIOS URL to ensure the browser doesn't serve the old corrupted zip from memory cache
     window.EJS_biosUrl = '/bios/dc_bios.zip?v=2'; // EmulatorJS extracts zips directly into RetroArch's /system folder
     
+    // Inject Flycast WASM tuned core options to prevent silent hangs (specifically threaded rendering and HLE bios)
+    window.EJS_defaultOptions = {
+      'reicast_boot_to_bios': 'disabled',
+      'reicast_hle_bios': 'disabled',
+      'reicast_threaded_rendering': 'disabled',
+      'reicast_synchronous_rendering': 'disabled',
+      'reicast_internal_resolution': '640x480',
+      'reicast_mipmapping': 'disabled',
+      'reicast_anisotropic_filtering': '1',
+      'reicast_texupscale': 'disabled',
+      'reicast_enable_rttb': 'disabled',
+      'reicast_enable_purupuru': 'disabled',
+      'reicast_alpha_sorting': 'per-strip (fast, least accurate)',
+      'reicast_delay_frame_swapping': 'disabled',
+      'reicast_frame_skipping': 'enabled',
+      'reicast_framerate': 'normal'
+    };
+    
     const script = document.createElement('script');
     script.src = '/data/loader.js';
     script.id = 'ejs-loader';
