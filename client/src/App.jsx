@@ -1,5 +1,73 @@
 import { useState, useEffect, useRef } from 'react';
 
+// A simple on-screen debug console to capture WASM stdout/stderr
+function DebugConsole() {
+  const [logs, setLogs] = useState([]);
+  const consoleEndRef = useRef(null);
+
+  useEffect(() => {
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    const addLog = (level, args) => {
+      const msg = Array.from(args).map(a => 
+        typeof a === 'object' ? JSON.stringify(a) : String(a)
+      ).join(' ');
+      
+      setLogs(prev => [...prev.slice(-99), { level, msg }]);
+    };
+
+    console.log = function(...args) {
+      addLog('info', args);
+      originalLog.apply(console, args);
+    };
+    console.warn = function(...args) {
+      addLog('warn', args);
+      originalWarn.apply(console, args);
+    };
+    console.error = function(...args) {
+      addLog('error', args);
+      originalError.apply(console, args);
+    };
+
+    return () => {
+      console.log = originalLog;
+      console.warn = originalWarn;
+      console.error = originalError;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (consoleEndRef.current) {
+      consoleEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs]);
+
+  return (
+    <div style={{
+      position: 'absolute', top: '10px', left: '10px', zIndex: 9999,
+      width: '400px', height: '300px', backgroundColor: 'rgba(0,0,0,0.8)',
+      color: '#0f0', fontFamily: 'monospace', fontSize: '11px',
+      overflowY: 'auto', padding: '10px', border: '1px solid #333',
+      borderRadius: '5px', pointerEvents: 'none'
+    }}>
+      <div style={{ color: '#fff', borderBottom: '1px solid #333', marginBottom: '5px', paddingBottom: '5px' }}>
+        Emulator WASM Debug Console
+      </div>
+      {logs.map((log, i) => (
+        <div key={i} style={{ 
+          color: log.level === 'error' ? '#f00' : log.level === 'warn' ? '#ff0' : '#0f0',
+          whiteSpace: 'pre-wrap', wordBreak: 'break-all', marginBottom: '2px'
+        }}>
+          {log.msg}
+        </div>
+      ))}
+      <div ref={consoleEndRef} />
+    </div>
+  );
+}
+
 function App() {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,8 +105,11 @@ function App() {
     window.EJS_startOnLoaded = true;
     window.EJS_color = '#ff2a6d';
     // Use a cache buster for the BIOS URL to ensure the browser doesn't serve the old corrupted zip from memory cache
-    window.EJS_biosUrl = '/bios/dc_bios.zip?v=2'; // EmulatorJS extracts zips directly into RetroArch's /system folder
+    window.EJS_biosUrl = '/bios/dc_bios.zip?v=3'; // EmulatorJS extracts zips directly into RetroArch's /system folder
     
+    // Enable WASM stdout/stderr dumping!
+    window.EJS_DEBUG_XX = true;
+
     // Inject Flycast WASM tuned core options to prevent silent hangs (specifically threaded rendering and HLE bios)
     window.EJS_defaultOptions = {
       'reicast_boot_to_bios': 'disabled',
@@ -199,6 +270,7 @@ function App() {
 
       {activeGame && (
         <div className="emulator-overlay">
+          <DebugConsole />
           <button className="emulator-close" onClick={closeEmulator}>
             &times;
           </button>
