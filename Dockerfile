@@ -11,7 +11,7 @@ FROM node:20 AS backend
 WORKDIR /app
 
 # Invalidate cache for clean build
-ARG BUILD_REFRESH=2026-08-05-clean
+ARG BUILD_REFRESH=2026-08-05-v22
 
 # Install build tools
 RUN apt-get update && apt-get install -y curl unzip git p7zip-full zip
@@ -37,7 +37,7 @@ RUN curl -L -o /app/server/data/cores/flycast-wasm.js "https://github.com/nasome
     curl -L -o /app/server/data/cores/flycast-wasm.wasm "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.wasm" && \
     touch /app/server/data/cores/flycast-wasm.data
 
-# 4. Duplicate core into all 4 filename variations requested by EmulatorJS and export window.EJS_Runtime
+# 4. Duplicate core into all 4 filename variations and insert window.EJS_Runtime = EJS_Runtime immediately after IIFE closing brace
 RUN cd /app/server/data/cores && \
     cp flycast-wasm.js flycast-legacy-wasm.js && \
     cp flycast-wasm.wasm flycast-legacy-wasm.wasm && \
@@ -48,10 +48,7 @@ RUN cd /app/server/data/cores && \
     cp flycast-wasm.js flycast-thread-legacy-wasm.js && \
     cp flycast-wasm.wasm flycast-thread-legacy-wasm.wasm && \
     cp flycast-wasm.data flycast-thread-legacy-wasm.data && \
-    echo "" >> flycast-wasm.js && echo "window.EJS_Runtime = EJS_Runtime;" >> flycast-wasm.js && \
-    echo "" >> flycast-legacy-wasm.js && echo "window.EJS_Runtime = EJS_Runtime;" >> flycast-legacy-wasm.js && \
-    echo "" >> flycast-thread-wasm.js && echo "window.EJS_Runtime = EJS_Runtime;" >> flycast-thread-wasm.js && \
-    echo "" >> flycast-thread-legacy-wasm.js && echo "window.EJS_Runtime = EJS_Runtime;" >> flycast-thread-legacy-wasm.js
+    node -e "const fs = require('fs'); ['flycast-wasm.js', 'flycast-legacy-wasm.js', 'flycast-thread-wasm.js', 'flycast-thread-legacy-wasm.js'].forEach(file => { let c = fs.readFileSync(file, 'utf8'); c = c.replace('})();', '})();\nwindow.EJS_Runtime = EJS_Runtime;\n'); fs.writeFileSync(file, c); });"
 
 # 5. Generate core metadata expected by EmulatorJS loader
 RUN echo '{"name":"flycast","extensions":["cdi","gdi","chd","cue","iso"],"options":{"defaultWebGL2":true}}' > /app/server/data/cores/reports/flycast.json && \
