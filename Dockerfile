@@ -11,7 +11,7 @@ FROM node:20 AS backend
 WORKDIR /app
 
 # Bust Docker layer cache for downloads on new commits
-ARG CACHE_DATE=2026-08-04-v20
+ARG CACHE_DATE=2026-08-05-v21
 
 # Install tools for downloading dependencies
 RUN apt-get update && apt-get install -y curl unzip git p7zip-full zip
@@ -46,10 +46,7 @@ RUN curl -L -o /app/server/data/cores/flycast-wasm.js "https://github.com/nasome
     cp flycast-wasm.js flycast-thread-legacy-wasm.js && \
     cp flycast-wasm.wasm flycast-thread-legacy-wasm.wasm && \
     cp flycast-wasm.data flycast-thread-legacy-wasm.data && \
-    echo "window.EJS_Runtime = EJS_Runtime;" >> flycast-wasm.js && \
-    echo "window.EJS_Runtime = EJS_Runtime;" >> flycast-legacy-wasm.js && \
-    echo "window.EJS_Runtime = EJS_Runtime;" >> flycast-thread-wasm.js && \
-    echo "window.EJS_Runtime = EJS_Runtime;" >> flycast-thread-legacy-wasm.js
+    node -e "const fs = require('fs'); ['flycast-wasm.js', 'flycast-legacy-wasm.js', 'flycast-thread-wasm.js', 'flycast-thread-legacy-wasm.js'].forEach(file => { let c = fs.readFileSync(file, 'utf8'); c = c.replace(/if\s*\(typeof exports[\s\S]*$/, ''); c += '\nwindow.EJS_Runtime = EJS_Runtime;\n'; fs.writeFileSync(file, c); });"
 
 # Generate core report metadata expected by EmulatorJS
 RUN mkdir -p /app/server/data/cores/reports && \
