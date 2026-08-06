@@ -1,36 +1,80 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+
+const CATEGORIES = ['ALL GAMES', 'ACTION & ADVENTURE', 'ARCADE & FIGHTING', 'RACING & SPORTS'];
 
 function App() {
   const [games, setGames] = useState([]);
-  const [focusedIndex, setFocusedIndex] = useState(0);
-  const [activeRow, setActiveRow] = useState(1); // 0 = Hero Button, 1 = Game Carousel
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoryIndex, setSelectedCategoryIndex] = useState(0);
+
+  // Focus Navigation Zones:
+  // 0 = Search Input Bar
+  // 1 = Category Pills
+  // 2 = Launch Play Button / Preview Strip
+  // 3 = Clean Cards Grid
+  const [focusedZone, setFocusedZone] = useState(3);
+  const [focusedCardIndex, setFocusedCardIndex] = useState(0);
+  const [focusedCategoryIndex, setFocusedCategoryIndex] = useState(0);
+
   const [isBooting, setIsBooting] = useState(false);
   const [status, setStatus] = useState('Loading Dreamcast Library...');
   const [gamepadConnected, setGamepadConnected] = useState(false);
   const [gamepadName, setGamepadName] = useState('');
 
+  const searchInputRef = useRef(null);
   const focusedCardRef = useRef(null);
   const animFrameRef = useRef(null);
   const lastNavTimeRef = useRef(0);
 
-  // Fetch games on load
+  // Fetch games from server
   useEffect(() => {
     fetch('/api/games')
       .then(res => res.json())
       .then(data => {
         setGames(data);
         if (data.length > 0) {
-          setStatus('Ready to boot.');
+          setStatus('Library ready.');
         } else {
-          setStatus('No games found in ROM directory.');
+          setStatus('No games found in local ROM directory.');
         }
       })
       .catch(err => setStatus(`Error: ${err.message}`));
   }, []);
 
-  // WebGL2 and startGame patches
+  // Filter games by category and search query
+  const filteredGames = useMemo(() => {
+    return games.filter(game => {
+      const matchesSearch = !searchQuery || game.name.toLowerCase().includes(searchQuery.toLowerCase());
+      if (!matchesSearch) return false;
+
+      const catName = CATEGORIES[selectedCategoryIndex];
+      if (catName === 'ALL GAMES') return true;
+
+      const nameLower = game.name.toLowerCase();
+      if (catName === 'ARCADE & FIGHTING') {
+        return nameLower.includes('fight') || nameLower.includes('vs') || nameLower.includes('street') || nameLower.includes('capcom') || nameLower.includes('snk') || nameLower.includes('marvel') || nameLower.includes('dead') || nameLower.includes('soul') || nameLower.includes('virtua');
+      } else if (catName === 'RACING & SPORTS') {
+        return nameLower.includes('race') || nameLower.includes('speed') || nameLower.includes('rally') || nameLower.includes('2k') || nameLower.includes('nba') || nameLower.includes('nfl') || nameLower.includes('nhl') || nameLower.includes('tennis') || nameLower.includes('golf') || nameLower.includes('gt');
+      } else if (catName === 'ACTION & ADVENTURE') {
+        return !nameLower.includes('2k') && !nameLower.includes('fight') && !nameLower.includes('vs');
+      }
+
+      return true;
+    });
+  }, [games, searchQuery, selectedCategoryIndex]);
+
+  // Keep focusedCardIndex within valid range when filtered list changes
+  useEffect(() => {
+    if (focusedCardIndex >= filteredGames.length) {
+      setFocusedCardIndex(Math.max(0, filteredGames.length - 1));
+    }
+  }, [filteredGames.length, focusedCardIndex]);
+
+  // Currently focused game
+  const selectedGame = filteredGames[focusedCardIndex] || games[0] || null;
+
+  // Flycast WASM patches & execution
   const applyFlycastPatches = () => {
-    // 1. WebGL2 Context compatibility patches
     if (!window.__flycastCanvasPatched) {
       window.__flycastCanvasPatched = true;
       const origGetContext = HTMLCanvasElement.prototype.getContext;
@@ -73,7 +117,6 @@ function App() {
             return origTexParameterf(target, pname, param);
           };
 
-          // Rewrite #version 130 → #version 300 es
           const origShaderSource = ctx.shaderSource.bind(ctx);
           ctx.shaderSource = function(shader, source) {
             if (typeof source === 'string' && source.indexOf('#version 130') !== -1) {
@@ -82,7 +125,6 @@ function App() {
             return origShaderSource(shader, source);
           };
 
-          // texImage2D internalformat fix: GL_RED (0x1903) -> GL_R8 (0x8229)
           const origTexImage2D = ctx.texImage2D.bind(ctx);
           ctx.texImage2D = function() {
             const args = Array.prototype.slice.call(arguments);
@@ -110,7 +152,6 @@ function App() {
       };
     }
 
-    // 2. AudioWorklet polyfill for HTTP
     const origAudioCtx = window.AudioContext || window.webkitAudioContext;
     if (origAudioCtx && !window.__audioPatched) {
       window.__audioPatched = true;
@@ -128,7 +169,6 @@ function App() {
       if (window.webkitAudioContext) window.webkitAudioContext = PatchedAudioContext;
     }
 
-    // 3. installStartGamePatch
     const CORE_OPTIONS = {
       'reicast_boot_to_bios': 'disabled',
       'reicast_hle_bios': 'disabled',
@@ -198,11 +238,10 @@ function App() {
     }, 50);
   };
 
-  // Launch Game Handler
   const launchGame = (gameObj) => {
     if (!gameObj) return;
     setIsBooting(true);
-    setStatus(`Booting ${gameObj.name}... Initializing Flycast WASM...`);
+    setStatus(`Booting ${gameObj.name}... Initializing Flycast...`);
 
     applyFlycastPatches();
 
@@ -233,24 +272,12 @@ function App() {
 
   const closeGame = () => {
     setIsBooting(false);
-    setStatus('Ready to boot.');
+    setStatus('Library ready.');
     window.location.reload();
   };
 
-  // Gamepad Event Listeners & Polling Engine
+  // Controller / Gamepad Navigation Engine
   useEffect(() => {
-    const handleConnect = (e) => {
-      setGamepadConnected(true);
-      setGamepadName(e.gamepad.id || 'Controller');
-    };
-    const handleDisconnect = () => {
-      setGamepadConnected(false);
-      setGamepadName('');
-    };
-
-    window.addEventListener('gamepadconnected', handleConnect);
-    window.addEventListener('gamepaddisconnected', handleDisconnect);
-
     const pollGamepad = () => {
       const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
       let activePad = null;
@@ -268,7 +295,7 @@ function App() {
         }
 
         const now = Date.now();
-        if (now - lastNavTimeRef.current > 200) { // 200ms debounce
+        if (now - lastNavTimeRef.current > 180) { // 180ms debounce
           const axisX = activePad.axes[0] || 0;
           const axisY = activePad.axes[1] || 0;
           const dpadUp = activePad.buttons[12]?.pressed;
@@ -278,29 +305,69 @@ function App() {
 
           const btnA = activePad.buttons[0]?.pressed; // A / Cross
           const btnB = activePad.buttons[1]?.pressed; // B / Circle
+          const btnLB = activePad.buttons[4]?.pressed; // LB
+          const btnRB = activePad.buttons[5]?.pressed; // RB
 
-          // Navigation
+          // Bumpers cycle categories
+          if (btnRB) {
+            setSelectedCategoryIndex(prev => (prev + 1) % CATEGORIES.length);
+            lastNavTimeRef.current = now;
+          } else if (btnLB) {
+            setSelectedCategoryIndex(prev => (prev - 1 + CATEGORIES.length) % CATEGORIES.length);
+            lastNavTimeRef.current = now;
+          }
+
+          // D-Pad Navigation
           if (dpadRight || axisX > 0.5) {
-            setFocusedIndex(prev => Math.min(prev + 1, games.length - 1));
+            if (focusedZone === 1) { // Category Pills
+              setSelectedCategoryIndex(prev => (prev + 1) % CATEGORIES.length);
+            } else if (focusedZone === 3 && filteredGames.length > 0) { // Game Grid
+              setFocusedCardIndex(prev => Math.min(prev + 1, filteredGames.length - 1));
+            }
             lastNavTimeRef.current = now;
           } else if (dpadLeft || axisX < -0.5) {
-            setFocusedIndex(prev => Math.max(prev - 1, 0));
+            if (focusedZone === 1) { // Category Pills
+              setSelectedCategoryIndex(prev => (prev - 1 + CATEGORIES.length) % CATEGORIES.length);
+            } else if (focusedZone === 3 && filteredGames.length > 0) { // Game Grid
+              setFocusedCardIndex(prev => Math.max(prev - 1, 0));
+            }
             lastNavTimeRef.current = now;
           } else if (dpadDown || axisY > 0.5) {
-            setActiveRow(1);
+            if (focusedZone === 0) setFocusedZone(1);
+            else if (focusedZone === 1) setFocusedZone(2);
+            else if (focusedZone === 2) setFocusedZone(3);
+            else if (focusedZone === 3 && filteredGames.length > 0) {
+              // Move down one grid row (~4 cards per row)
+              setFocusedCardIndex(prev => Math.min(prev + 4, filteredGames.length - 1));
+            }
             lastNavTimeRef.current = now;
           } else if (dpadUp || axisY < -0.5) {
-            setActiveRow(0);
+            if (focusedZone === 3) {
+              if (focusedCardIndex >= 4) {
+                setFocusedCardIndex(prev => prev - 4);
+              } else {
+                setFocusedZone(2);
+              }
+            } else if (focusedZone === 2) setFocusedZone(1);
+            else if (focusedZone === 1) setFocusedZone(0);
             lastNavTimeRef.current = now;
           }
 
           // Action Buttons
           if (btnA && !isBooting) {
-            launchGame(games[focusedIndex]);
-            lastNavTimeRef.current = now + 500;
-          } else if (btnB && isBooting) {
-            closeGame();
-            lastNavTimeRef.current = now + 500;
+            if (focusedZone === 2 && selectedGame) {
+              launchGame(selectedGame);
+            } else if (focusedZone === 3 && selectedGame) {
+              launchGame(selectedGame);
+            }
+            lastNavTimeRef.current = now + 400;
+          } else if (btnB) {
+            if (isBooting) {
+              closeGame();
+            } else if (searchQuery) {
+              setSearchQuery('');
+            }
+            lastNavTimeRef.current = now + 400;
           }
         }
       }
@@ -310,14 +377,20 @@ function App() {
 
     animFrameRef.current = requestAnimationFrame(pollGamepad);
 
+    const handleConnect = (e) => { setGamepadConnected(true); setGamepadName(e.gamepad.id || 'Controller'); };
+    const handleDisconnect = () => { setGamepadConnected(false); setGamepadName(''); };
+
+    window.addEventListener('gamepadconnected', handleConnect);
+    window.addEventListener('gamepaddisconnected', handleDisconnect);
+
     return () => {
       window.removeEventListener('gamepadconnected', handleConnect);
       window.removeEventListener('gamepaddisconnected', handleDisconnect);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [games, focusedIndex, activeRow, isBooting, gamepadConnected]);
+  }, [filteredGames, focusedZone, focusedCardIndex, isBooting, gamepadConnected, selectedGame, searchQuery]);
 
-  // Keyboard navigation fallback (Arrow keys, Enter, Esc)
+  // Keyboard navigation fallback
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (isBooting) {
@@ -326,181 +399,195 @@ function App() {
       }
 
       if (e.key === 'ArrowRight') {
-        setFocusedIndex(prev => Math.min(prev + 1, games.length - 1));
+        if (focusedZone === 3) setFocusedCardIndex(prev => Math.min(prev + 1, filteredGames.length - 1));
+        else if (focusedZone === 1) setSelectedCategoryIndex(prev => (prev + 1) % CATEGORIES.length);
       } else if (e.key === 'ArrowLeft') {
-        setFocusedIndex(prev => Math.max(prev - 1, 0));
-      } else if (e.key === 'ArrowUp') {
-        setActiveRow(0);
+        if (focusedZone === 3) setFocusedCardIndex(prev => Math.max(prev - 1, 0));
+        else if (focusedZone === 1) setSelectedCategoryIndex(prev => (prev - 1 + CATEGORIES.length) % CATEGORIES.length);
       } else if (e.key === 'ArrowDown') {
-        setActiveRow(1);
+        if (focusedZone < 3) setFocusedZone(prev => prev + 1);
+        else if (focusedZone === 3) setFocusedCardIndex(prev => Math.min(prev + 4, filteredGames.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        if (focusedZone === 3) {
+          if (focusedCardIndex >= 4) setFocusedCardIndex(prev => prev - 4);
+          else setFocusedZone(2);
+        } else if (focusedZone > 0) setFocusedZone(prev => prev - 1);
       } else if (e.key === 'Enter') {
-        launchGame(games[focusedIndex]);
+        if (selectedGame) launchGame(selectedGame);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [games, focusedIndex, isBooting]);
+  }, [filteredGames, focusedZone, focusedCardIndex, isBooting, selectedGame]);
 
-  // Auto-scroll focused game into view
+  // Auto-focus search input element when focusedZone === 0
   useEffect(() => {
-    if (focusedCardRef.current && activeRow === 1) {
-      focusedCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    if (focusedZone === 0 && searchInputRef.current) {
+      searchInputRef.current.focus();
+    } else if (searchInputRef.current) {
+      searchInputRef.current.blur();
     }
-  }, [focusedIndex, activeRow]);
+  }, [focusedZone]);
 
-  const selectedGame = games[focusedIndex] || null;
+  // Auto-scroll focused game card into view
+  useEffect(() => {
+    if (focusedCardRef.current && focusedZone === 3) {
+      focusedCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
+  }, [focusedCardIndex, focusedZone]);
+
+  // Dynamic Background Backdrop URL (uses game snap screenshot, falls back to boxart)
+  const bgBackdropUrl = selectedGame ? (selectedGame.snapUrl || selectedGame.boxartUrl) : '';
 
   return (
-    <div className="app-container">
-      {/* Header Bar */}
-      <header>
-        <h1>DREAMCAST TV</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <div style={{
-            fontSize: '13px',
-            padding: '6px 12px',
-            borderRadius: '20px',
-            backgroundColor: gamepadConnected ? 'rgba(0, 255, 102, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-            border: `1px solid ${gamepadConnected ? '#00ff66' : 'rgba(255, 255, 255, 0.1)'}`,
-            color: gamepadConnected ? '#00ff66' : '#aaa'
-          }}>
-            🎮 {gamepadConnected ? `Connected: ${gamepadName.substring(0, 20)}...` : 'Gamepad Ready (Connect Controller)'}
-          </div>
-        </div>
-      </header>
-
-      {/* Main Netflix Content Showcase */}
-      {!isBooting && selectedGame && (
-        <div className="hero" style={{
-          backgroundImage: `linear-gradient(0deg, var(--bg-dark) 0%, rgba(15,15,19,0.4) 100%), url(${selectedGame.thumbnailUrl})`
-        }}>
-          <div className="hero-content">
-            <div style={{
-              display: 'inline-block',
-              padding: '4px 10px',
-              backgroundColor: 'var(--accent)',
-              borderRadius: '4px',
-              fontSize: '12px',
-              fontWeight: '700',
-              letterSpacing: '1px',
-              marginBottom: '12px'
-            }}>
-              SEGA DREAMCAST
-            </div>
-            <h2>{selectedGame.name}</h2>
-            <p>Sega Dreamcast WebAssembly • CHD Disc Format • {(selectedGame.size / (1024 * 1024)).toFixed(1)} MB</p>
-
-            <div style={{ display: 'flex', gap: '15px', marginTop: '20px' }}>
-              <button
-                onClick={() => launchGame(selectedGame)}
-                className={activeRow === 0 ? 'focused' : ''}
-                style={{
-                  padding: '16px 36px',
-                  fontSize: '18px',
-                  fontWeight: '700',
-                  backgroundColor: 'var(--accent)',
-                  color: '#fff',
-                  border: activeRow === 0 ? '3px solid #fff' : 'none',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                  boxShadow: activeRow === 0 ? '0 0 25px var(--accent-glow)' : 'none',
-                  transform: activeRow === 0 ? 'scale(1.05)' : 'scale(1)',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                ► PLAY GAME (Press A)
-              </button>
-            </div>
-          </div>
-        </div>
+    <div>
+      {/* Dynamic Full-Screen Game Screenshot Backdrop */}
+      {bgBackdropUrl && (
+        <div
+          className="bg-backdrop"
+          style={{ backgroundImage: `url(${bgBackdropUrl})` }}
+        />
       )}
+      <div className="bg-overlay" />
 
-      {/* Games Catalog Row */}
-      {!isBooting && games.length > 0 && (
-        <div className="games-section">
-          <h3>Dreamcast Games Library ({games.length})</h3>
-          <div className="games-row">
-            {games.map((game, index) => {
-              const isFocused = activeRow === 1 && index === focusedIndex;
+      {/* Main Content Area */}
+      <div className="app-wrapper">
+        {/* Top Header Navbar */}
+        <header className="top-bar">
+          <div className="brand">
+            <h1>SEGA DREAMCAST</h1>
+          </div>
+          <div className={`pad-badge ${gamepadConnected ? 'connected' : ''}`}>
+            🎮 {gamepadConnected ? `Connected: ${gamepadName.substring(0, 24)}...` : 'Gamepad Ready (Connect Controller)'}
+          </div>
+        </header>
+
+        {/* Controls Bar: Search & Category Tabs */}
+        {!isBooting && (
+          <div className="controls-bar">
+            {/* Live Search Input */}
+            <div className="search-input-wrapper">
+              <span className="search-icon">🔍</span>
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search Dreamcast titles (e.g. Crazy Taxi, Marvel, Sonic)..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={focusedZone === 0 ? 'focused' : ''}
+                onFocus={() => setFocusedZone(0)}
+              />
+            </div>
+
+            {/* Category Filter Pills */}
+            <div className="category-tabs">
+              {CATEGORIES.map((cat, idx) => {
+                const isActive = selectedCategoryIndex === idx;
+                const isFocused = focusedZone === 1 && selectedCategoryIndex === idx;
+                return (
+                  <button
+                    key={idx}
+                    className={`category-tab ${isActive ? 'active' : ''} ${isFocused ? 'focused' : ''}`}
+                    onClick={() => {
+                      setSelectedCategoryIndex(idx);
+                      setFocusedZone(1);
+                    }}
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Selected Game Preview Strip */}
+        {!isBooting && selectedGame && (
+          <div className="selection-preview-bar">
+            <div className="preview-title">
+              <h2>{selectedGame.name}</h2>
+              <span>CHD Disc Image Format • {(selectedGame.size / (1024 * 1024)).toFixed(1)} MB</span>
+            </div>
+            <button
+              className={`play-action-btn ${focusedZone === 2 ? 'focused' : ''}`}
+              onClick={() => launchGame(selectedGame)}
+            >
+              ► PLAY NOW (Press A)
+            </button>
+          </div>
+        )}
+
+        {/* Clean Game Cards Grid */}
+        {!isBooting && (
+          <div className="cards-grid">
+            {filteredGames.map((game, index) => {
+              const isFocused = focusedZone === 3 && index === focusedCardIndex;
               return (
                 <div
                   key={index}
                   ref={isFocused ? focusedCardRef : null}
-                  className={`game-card ${isFocused ? 'focused' : ''}`}
+                  className={`game-card-clean ${isFocused ? 'focused' : ''}`}
                   onClick={() => {
-                    setFocusedIndex(index);
-                    setActiveRow(1);
+                    setFocusedCardIndex(index);
+                    setFocusedZone(3);
                     launchGame(game);
                   }}
-                  style={{
-                    border: isFocused ? '3px solid var(--accent)' : '1px solid rgba(255,255,255,0.08)',
-                    boxShadow: isFocused ? '0 0 25px var(--accent-glow)' : 'none'
+                  onMouseEnter={() => {
+                    setFocusedCardIndex(index);
                   }}
                 >
-                  <div className="game-art">
+                  <div className="card-media">
                     <img
-                      src={game.thumbnailUrl}
+                      src={game.boxartUrl}
                       alt={game.name}
                       onError={(e) => {
-                        e.target.src = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80&w=400';
+                        e.target.src = game.snapUrl || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80&w=400';
                       }}
                     />
+                    <div className="card-badge">DREAMCAST</div>
                   </div>
-                  <div className="play-icon">
-                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                  </div>
-                  <div className="game-info">
-                    <h4>{game.name}</h4>
-                    <p>{(game.size / (1024 * 1024)).toFixed(1)} MB</p>
+                  <div className="card-details">
+                    <h3>{game.name}</h3>
+                    <div className="meta-row">
+                      <span>CHD</span>
+                      <span>{(game.size / (1024 * 1024)).toFixed(1)} MB</span>
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Controller Navigation Footer Bar */}
-      {!isBooting && (
-        <footer style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          padding: '12px 40px',
-          backgroundColor: 'rgba(15, 15, 19, 0.95)',
-          borderTop: '1px solid rgba(255,255,255,0.08)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          zIndex: 100,
-          fontSize: '13px',
-          color: 'var(--text-muted)'
-        }}>
-          <div>
-            <strong>Controls:</strong> <span>🎮 D-Pad / Left Stick: Navigate Cards</span> &nbsp;|&nbsp; <span>🅰️ Button A / Enter: Select / Launch</span> &nbsp;|&nbsp; <span>⬆️⬇️ Up/Down: Toggle Hero Banner</span>
+        {/* Controller Legend Footer */}
+        {!isBooting && (
+          <footer className="controller-footer">
+            <div>
+              <strong>Controls:</strong> &nbsp;
+              <span>🎮 D-Pad / Left Stick: Navigate Grid</span> &nbsp;|&nbsp;
+              <span>🅰️ Button A / Enter: Launch</span> &nbsp;|&nbsp;
+              <span>LB / RB: Cycle Category Filter</span> &nbsp;|&nbsp;
+              <span>🅱️ Button B: Clear Search</span>
+            </div>
+            <div>Status: {status} ({filteredGames.length} games)</div>
+          </footer>
+        )}
+
+        {/* Active Emulation Modal */}
+        {isBooting && (
+          <div className="emu-overlay-screen">
+            <button
+              className="emu-close-btn"
+              onClick={closeGame}
+              title="Exit Emulation (Press B or ESC)"
+            >
+              ✕
+            </button>
+            <div id="game-container" />
           </div>
-          <div>Status: {status}</div>
-        </footer>
-      )}
-
-      {/* Active Emulation Modal Container */}
-      {isBooting && (
-        <div className="emulator-overlay">
-          <button
-            className="emulator-close"
-            onClick={closeGame}
-            title="Exit Emulation (Press B)"
-          >
-            ✕
-          </button>
-          <div
-            id="game-container"
-            style={{ width: '100vw', height: '100vh', backgroundColor: '#000' }}
-          ></div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

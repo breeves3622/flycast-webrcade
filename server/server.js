@@ -437,8 +437,9 @@ app.get('/api/games', (req, res) => {
         name: cleanName,
         filename: f,
         size: size,
-        thumbnailUrl: `/api/thumbnail?url=${encodeURIComponent(`https://thumbnails.libretro.com/Sega%20-%20Dreamcast/Named_Boxarts/${encodeURIComponent(cleanName)}.png`)}`,
-        // Direct link to the static route
+        boxartUrl: `/api/thumbnail?url=${encodeURIComponent(`https://thumbnails.libretro.com/Sega%20-%20Dreamcast/Named_Boxarts/${encodeURIComponent(cleanName)}.png`)}`,
+        snapUrl: `/api/thumbnail?url=${encodeURIComponent(`https://thumbnails.libretro.com/Sega%20-%20Dreamcast/Named_Snaps/${encodeURIComponent(cleanName)}.png`)}`,
+        titleUrl: `/api/thumbnail?url=${encodeURIComponent(`https://thumbnails.libretro.com/Sega%20-%20Dreamcast/Named_Titles/${encodeURIComponent(cleanName)}.png`)}`,
         url: `/roms/${encodeURIComponent(f)}`
       };
     });
