@@ -11,7 +11,7 @@ FROM node:20 AS backend
 WORKDIR /app
 
 # Invalidate cache for clean build
-ARG BUILD_REFRESH=2026-08-05-v23
+ARG BUILD_REFRESH=2026-08-06-v24
 
 # Install build tools
 RUN apt-get update && apt-get install -y curl unzip git p7zip-full zip
@@ -26,18 +26,19 @@ RUN curl -L -o /tmp/emulatorjs.7z "https://github.com/EmulatorJS/EmulatorJS/rele
     cp -r data/* /app/server/data/ && \
     rm -rf /tmp/emulatorjs.7z /tmp/data
 
-# 2. Download official minified EmulatorJS engine
+# 2. Download official minified EmulatorJS engine and patch requiresWebGL2 to include flycast
 RUN curl -L -o /tmp/emulator.min.zip "https://cdn.emulatorjs.org/stable/data/emulator.min.zip" && \
     cd /app/server/data && \
     7z x -y /tmp/emulator.min.zip && \
-    rm /tmp/emulator.min.zip
+    rm /tmp/emulator.min.zip && \
+    node -e "const fs = require('fs'); let c = fs.readFileSync('emulator.min.js', 'utf8'); c = c.replace('requiresWebGL2(t){return[\"ppsspp\"].includes(t)}', 'requiresWebGL2(t){return[\"ppsspp\",\"flycast\"].includes(t)}'); fs.writeFileSync('emulator.min.js', c);"
 
 # 3. Download official nasomers/flycast-wasm v1.0 release files
 RUN curl -L -o /app/server/data/cores/flycast-wasm.js "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.js" && \
     curl -L -o /app/server/data/cores/flycast-wasm.wasm "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.wasm" && \
     touch /app/server/data/cores/flycast-wasm.data
 
-# 4. Duplicate core into all 4 filename variations and insert window.EJS_Runtime = EJS_Runtime immediately after the true IIFE closing brace (at lastIndexOf)
+# 4. Duplicate core into all 4 filename variations and insert window.EJS_Runtime = EJS_Runtime at true end of IIFE
 RUN cd /app/server/data/cores && \
     cp flycast-wasm.js flycast-legacy-wasm.js && \
     cp flycast-wasm.wasm flycast-legacy-wasm.wasm && \

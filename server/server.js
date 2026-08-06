@@ -47,6 +47,104 @@ app.get('/test', (req, res) => {
     select { padding: 10px; font-size: 16px; background: #333; color: #fff; border: 1px solid #444; border-radius: 6px; width: 100%; max-width: 500px; margin-bottom: 20px; }
     #game-container { width: 640px; height: 480px; background: #000; border: 2px solid #333; border-radius: 8px; margin-top: 20px; }
   </style>
+  <!-- Console noise suppression -->
+  <script>
+    (function() {
+      var origWarn = console.warn;
+      console.warn = function() {
+        if (arguments.length > 0 && typeof arguments[0] === 'string') {
+          var msg = arguments[0];
+          if (msg.indexOf('__syscall_mprotect') !== -1) return;
+          if (msg.indexOf('is not a valid value') !== -1) return;
+        }
+        return origWarn.apply(console, arguments);
+      };
+    })();
+  </script>
+  <!-- WebGL2 compatibility patches from flycast.medieval.software -->
+  <script>
+    (function() {
+      var origGetContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function(type, attrs) {
+        var ctx = origGetContext.call(this, type, attrs);
+        if (ctx && (type === 'webgl2' || type === 'experimental-webgl2') && !ctx.__flycastPatched) {
+          ctx.__flycastPatched = true;
+          var origGetParam = ctx.getParameter.bind(ctx);
+
+          ctx.getParameter = function(pname) {
+            if (pname === 0x1F02 || pname === ctx.VERSION) return 'OpenGL ES 3.0 WebGL 2.0';
+            if (pname === 0x8B8C || pname === ctx.SHADING_LANGUAGE_VERSION) return 'OpenGL ES GLSL ES 3.00';
+            return origGetParam(pname);
+          };
+
+          var origGetError = ctx.getError.bind(ctx);
+          ctx.getError = function() {
+            var err = origGetError();
+            while (err === 0x500) { err = origGetError(); }
+            return err;
+          };
+
+          var texBindings = {};
+          texBindings[ctx.TEXTURE_2D] = ctx.TEXTURE_BINDING_2D;
+          texBindings[ctx.TEXTURE_CUBE_MAP] = ctx.TEXTURE_BINDING_CUBE_MAP;
+          if (ctx.TEXTURE_3D) texBindings[ctx.TEXTURE_3D] = ctx.TEXTURE_BINDING_3D;
+          if (ctx.TEXTURE_2D_ARRAY) texBindings[ctx.TEXTURE_2D_ARRAY] = ctx.TEXTURE_BINDING_2D_ARRAY;
+
+          var origTexParameteri = ctx.texParameteri.bind(ctx);
+          ctx.texParameteri = function(target, pname, param) {
+            var b = texBindings[target];
+            if (b && !origGetParam(b)) return;
+            return origTexParameteri(target, pname, param);
+          };
+
+          var origTexParameterf = ctx.texParameterf.bind(ctx);
+          ctx.texParameterf = function(target, pname, param) {
+            var b = texBindings[target];
+            if (b && !origGetParam(b)) return;
+            return origTexParameterf(target, pname, param);
+          };
+
+          // Rewrite #version 130 → #version 300 es
+          var origShaderSource = ctx.shaderSource.bind(ctx);
+          ctx.shaderSource = function(shader, source) {
+            if (typeof source === 'string' && source.indexOf('#version 130') !== -1) {
+              source = source.replace(/#version 130/g, '#version 300 es');
+              console.log('[flycast-wasm] Rewrote #version 130 → 300 es');
+            }
+            return origShaderSource(shader, source);
+          };
+
+          // texImage2D internalformat fix: GL_RED (0x1903) -> GL_R8 (0x8229)
+          var origTexImage2D = ctx.texImage2D.bind(ctx);
+          ctx.texImage2D = function() {
+            var args = Array.prototype.slice.call(arguments);
+            if (args.length >= 3 && args[2] === 0x1903) args[2] = 0x8229;
+            return origTexImage2D.apply(null, args);
+          };
+
+          // Fallback for any shader that fails to compile
+          var origCompileShader = ctx.compileShader.bind(ctx);
+          ctx.compileShader = function(shader) {
+            origCompileShader(shader);
+            if (!ctx.getShaderParameter(shader, ctx.COMPILE_STATUS)) {
+              var log = ctx.getShaderInfoLog(shader);
+              var type = ctx.getShaderParameter(shader, ctx.SHADER_TYPE);
+              console.warn('[flycast-wasm] Shader compile failed, substituting fallback. Log:', log);
+              var fallback;
+              if (type === ctx.VERTEX_SHADER) {
+                fallback = '#version 300 es\\nin vec3 VertexCoord;\\nuniform float time;\\nvoid main() { gl_Position = vec4(0.0); }\\n';
+              } else {
+                fallback = '#version 300 es\\nprecision mediump float;\\nout vec4 FragColor;\\nvoid main() { FragColor = vec4(0.0, 0.0, 0.0, 0.0); }\\n';
+              }
+              origShaderSource(shader, fallback);
+              origCompileShader(shader);
+            }
+          };
+        }
+        return ctx;
+      };
+    })();
+  </script>
 </head>
 <body>
   <h1>Flycast WASM Direct Test Runner</h1>
@@ -69,6 +167,77 @@ app.get('/test', (req, res) => {
     const statusEl = document.getElementById('status');
     const selectEl = document.getElementById('game-select');
     const bootBtn = document.getElementById('boot-btn');
+
+    const CORE_OPTIONS = {
+      'reicast_boot_to_bios': 'disabled',
+      'reicast_hle_bios': 'disabled',
+      'reicast_threaded_rendering': 'disabled',
+      'reicast_synchronous_rendering': 'disabled',
+      'reicast_internal_resolution': '320x240',
+      'reicast_mipmapping': 'disabled',
+      'reicast_anisotropic_filtering': '1',
+      'reicast_texupscale': 'disabled',
+      'reicast_enable_rttb': 'disabled',
+      'reicast_enable_purupuru': 'disabled',
+      'reicast_alpha_sorting': 'per-strip (fast, least accurate)',
+      'reicast_delay_frame_swapping': 'disabled',
+      'reicast_frame_skipping': 'enabled',
+      'reicast_framerate': 'normal',
+      'reicast_enable_dsp': 'disabled',
+      'reicast_gdrom_fast_loading': 'enabled'
+    };
+
+    const CORE_OPTIONS_STR = Object.keys(CORE_OPTIONS).map(k => k + ' = "' + CORE_OPTIONS[k] + '"').join('\\n') + '\\n';
+
+    function installStartGamePatch() {
+      const BIOS_FILES = ['dc_boot.bin', 'dc_flash.bin'];
+      const iv = setInterval(() => {
+        const emu = window.EJS_emulator;
+        if (!emu || emu.__flycastPatched) return;
+        emu.__flycastPatched = true;
+        clearInterval(iv);
+
+        const origStartGame = emu.startGame;
+        emu.startGame = async function() {
+          try {
+            if (this.gameManager && this.gameManager.FS) {
+              const FS = this.gameManager.FS;
+              const biosDir = '/dc';
+              try { if (!FS.analyzePath(biosDir).exists) FS.mkdir(biosDir); } catch(e) {}
+              for (let j = 0; j < BIOS_FILES.length; j++) {
+                const src = '/' + BIOS_FILES[j];
+                const dst = biosDir + '/' + BIOS_FILES[j];
+                try {
+                  if (FS.analyzePath(src).exists && !FS.analyzePath(dst).exists) {
+                    const data = FS.readFile(src);
+                    FS.writeFile(dst, data);
+                  }
+                } catch(e) {}
+              }
+
+              if (this.Module && this.Module.callbacks) {
+                const origCb = this.Module.callbacks.setupCoreSettingFile;
+                this.Module.callbacks.setupCoreSettingFile = function(filePath) {
+                  try { FS.writeFile(filePath, CORE_OPTIONS_STR); } catch(e) {}
+                  if (origCb) origCb(filePath);
+                };
+              }
+
+              const cfgPath = '/home/web_user/.config/retroarch/retroarch.cfg';
+              try {
+                const cfg = new TextDecoder().decode(FS.readFile(cfgPath));
+                if (cfg.indexOf('system_directory') === -1) {
+                  FS.writeFile(cfgPath, cfg + 'system_directory = "/"\\n');
+                }
+              } catch(e) {}
+            }
+          } catch(e) {
+            console.error('[flycast-wasm] startGame patch failed:', e);
+          }
+          return origStartGame.apply(this, arguments);
+        };
+      }, 50);
+    }
 
     fetch('/api/games')
       .then(res => res.json())
@@ -100,16 +269,10 @@ app.get('/test', (req, res) => {
       window.EJS_pathtodata = '/data/';
       window.EJS_startOnLoaded = true;
       window.EJS_color = '#ff2a6d';
-      window.EJS_threads = true;
-      window.EJS_biosUrl = '/bios/dc_bios.zip?v=3';
+      window.EJS_biosUrl = '/bios/dc_bios.zip?v=4';
+      window.EJS_defaultOptions = CORE_OPTIONS;
 
-      window.EJS_defaultOptions = {
-        'reicast_boot_to_bios': 'disabled',
-        'reicast_hle_bios': 'disabled',
-        'reicast_threaded_rendering': 'disabled',
-        'reicast_synchronous_rendering': 'disabled',
-        'reicast_internal_resolution': '640x480'
-      };
+      installStartGamePatch();
 
       const s = document.createElement('script');
       s.src = '/data/loader.js';
