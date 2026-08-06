@@ -11,7 +11,7 @@ FROM node:20 AS backend
 WORKDIR /app
 
 # Invalidate cache for clean build
-ARG BUILD_REFRESH=2026-08-06-v25
+ARG BUILD_REFRESH=2026-08-06-v26
 
 # Install build tools
 RUN apt-get update && apt-get install -y curl unzip git p7zip-full zip
@@ -55,10 +55,9 @@ RUN cd /app/server/data/cores && \
 RUN echo '{"name":"flycast","extensions":["cdi","gdi","chd","cue","iso"],"options":{"defaultWebGL2":true}}' > /app/server/data/cores/reports/flycast.json && \
     echo '{"name":"flycast","extensions":["cdi","gdi","chd","cue","iso"],"options":{"defaultWebGL2":true}}' > /app/server/data/cores/reports/flycast-wasm.json
 
-# 6. Download official Dreamcast BIOS from archive.org and package into dc_bios.zip
+# 6. Setup Dreamcast BIOS directory structure
 RUN mkdir -p /app/server/bios/dc /app/server/bios/data && \
-    curl -L -o /app/server/bios/dc_boot.bin "https://archive.org/download/sega-dreamcast-bios/dc_boot.bin" && \
-    curl -L -o /app/server/bios/dc_flash.bin "https://archive.org/download/sega-dreamcast-bios/dc_flash.bin" && \
+    touch /app/server/bios/dc_boot.bin /app/server/bios/dc_flash.bin && \
     cp /app/server/bios/dc_boot.bin /app/server/bios/dc/ && \
     cp /app/server/bios/dc_flash.bin /app/server/bios/dc/ && \
     cp /app/server/bios/dc_boot.bin /app/server/bios/data/ && \

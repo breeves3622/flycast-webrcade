@@ -44,8 +44,15 @@ app.get('/test', (req, res) => {
     h1 { color: #ff2a6d; margin-top: 0; }
     .card { background: #222; border: 1px solid #333; padding: 15px; border-radius: 8px; margin: 20px 0; }
     button { background: #ff2a6d; color: #fff; border: none; padding: 14px 28px; font-size: 18px; font-weight: bold; border-radius: 6px; cursor: pointer; }
+    button:disabled { background: #444; color: #888; cursor: not-allowed; }
     select { padding: 10px; font-size: 16px; background: #333; color: #fff; border: 1px solid #444; border-radius: 6px; width: 100%; max-width: 500px; margin-bottom: 20px; }
     #game-container { width: 640px; height: 480px; background: #000; border: 2px solid #333; border-radius: 8px; margin-top: 20px; }
+    .status-item { display: flex; align-items: center; gap: 10px; font-size: 15px; margin: 6px 0; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+    .dot.ok { background: #00ff66; box-shadow: 0 0 8px #00ff66; }
+    .dot.missing { background: #ff3333; box-shadow: 0 0 8px #ff3333; }
+    .upload-btn { display: inline-block; background: rgba(255, 42, 109, 0.15); border: 1px solid #ff2a6d; color: #ff2a6d; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; margin-top: 10px; }
+    .upload-btn:hover { background: rgba(255, 42, 109, 0.3); }
   </style>
   <!-- Console noise suppression -->
   <script>
@@ -148,10 +155,27 @@ app.get('/test', (req, res) => {
 </head>
 <body>
   <h1>Flycast WASM Direct Test Runner</h1>
-  <p>Direct HTML diagnostic runner (Bypassing Cloudflare Tunnel asset caching)</p>
+  <p>Direct HTML diagnostic runner with live BIOS verification</p>
   
   <div class="card">
-    <strong>Status: </strong><span id="status">Fetching game list...</span>
+    <h3 style="margin-top:0; color:#00ff66;">Dreamcast BIOS Status</h3>
+    <div class="status-item">
+      <div class="dot missing" id="boot-dot"></div>
+      <span id="boot-label">dc_boot.bin: Checking...</span>
+    </div>
+    <div class="status-item">
+      <div class="dot missing" id="flash-dot"></div>
+      <span id="flash-label">dc_flash.bin: Checking...</span>
+    </div>
+
+    <label class="upload-btn">
+      Upload BIOS Files (dc_boot.bin, dc_flash.bin)
+      <input type="file" id="bios-input" accept=".bin" multiple hidden>
+    </label>
+  </div>
+
+  <div class="card">
+    <strong>Status: </strong><span id="status">Verifying BIOS & games...</span>
   </div>
 
   <div>
@@ -164,9 +188,75 @@ app.get('/test', (req, res) => {
 
   <script>
     let gamesList = [];
+    let isBiosReady = false;
     const statusEl = document.getElementById('status');
     const selectEl = document.getElementById('game-select');
     const bootBtn = document.getElementById('boot-btn');
+    const bootDot = document.getElementById('boot-dot');
+    const flashDot = document.getElementById('flash-dot');
+    const bootLabel = document.getElementById('boot-label');
+    const flashLabel = document.getElementById('flash-label');
+    const biosInput = document.getElementById('bios-input');
+
+    async function checkBiosStatus() {
+      try {
+        const res = await fetch('/api/bios/status');
+        const data = await res.json();
+        
+        const bootOk = data.dc_boot && data.dc_boot.valid;
+        const flashOk = data.dc_flash && data.dc_flash.valid;
+
+        bootDot.className = 'dot ' + (bootOk ? 'ok' : 'missing');
+        flashDot.className = 'dot ' + (flashOk ? 'ok' : 'missing');
+
+        bootLabel.textContent = 'dc_boot.bin: ' + (bootOk ? \`VERIFIED (\${(data.dc_boot.size/(1024*1024)).toFixed(2)} MB)\` : \`MISSING OR CORRUPT (\${data.dc_boot.size} bytes - expected 2.0MB)\`);
+        flashLabel.textContent = 'dc_flash.bin: ' + (flashOk ? \`VERIFIED (\${(data.dc_flash.size/1024).toFixed(1)} KB)\` : \`MISSING OR CORRUPT (\${data.dc_flash.size} bytes - expected 128KB)\`);
+
+        isBiosReady = bootOk && flashOk;
+        updateBootButtonState();
+      } catch(e) {
+        console.error('Error checking BIOS status:', e);
+      }
+    }
+
+    async function handleBiosUpload(e) {
+      const files = e.target.files;
+      if (!files.length) return;
+
+      statusEl.innerText = 'Uploading BIOS files...';
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const fname = f.name.toLowerCase();
+        if (fname === 'dc_boot.bin' || fname === 'dc_flash.bin') {
+          const buf = await f.arrayBuffer();
+          await fetch('/api/bios/upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/octet-stream',
+              'X-Filename': fname
+            },
+            body: buf
+          });
+        }
+      }
+      biosInput.value = '';
+      statusEl.innerText = 'BIOS files updated!';
+      await checkBiosStatus();
+    }
+
+    function updateBootButtonState() {
+      if (isBiosReady && gamesList.length > 0) {
+        bootBtn.disabled = false;
+        selectEl.disabled = false;
+        statusEl.innerText = 'System ready! BIOS files verified. Select game to boot.';
+      } else if (!isBiosReady) {
+        bootBtn.disabled = true;
+        statusEl.innerText = 'CRITICAL: Valid Dreamcast BIOS files (dc_boot.bin 2MB, dc_flash.bin 128KB) must be uploaded above before booting.';
+      }
+    }
+
+    biosInput.addEventListener('change', handleBiosUpload);
+    checkBiosStatus();
 
     const CORE_OPTIONS = {
       'reicast_boot_to_bios': 'disabled',
@@ -245,9 +335,7 @@ app.get('/test', (req, res) => {
         gamesList = data;
         if (data.length > 0) {
           selectEl.innerHTML = data.map((g, i) => \`<option value="\${i}">\${g.name} (\${(g.size/(1024*1024)).toFixed(1)} MB)</option>\`).join('');
-          selectEl.disabled = false;
-          bootBtn.disabled = false;
-          statusEl.innerText = 'Ready to boot: ' + data[0].name;
+          updateBootButtonState();
         } else {
           statusEl.innerText = 'No games found in local ROM directory.';
         }
@@ -255,6 +343,11 @@ app.get('/test', (req, res) => {
       .catch(err => statusEl.innerText = 'Error fetching games: ' + err.message);
 
     bootBtn.onclick = () => {
+      if (!isBiosReady) {
+        alert('Cannot boot: Sega Dreamcast BIOS files (dc_boot.bin and dc_flash.bin) are missing or corrupt.');
+        return;
+      }
+
       const selected = gamesList[selectEl.value];
       if (!selected) return;
       
@@ -269,7 +362,7 @@ app.get('/test', (req, res) => {
       window.EJS_pathtodata = '/data/';
       window.EJS_startOnLoaded = true;
       window.EJS_color = '#ff2a6d';
-      window.EJS_biosUrl = '/bios/dc_bios.zip?v=4';
+      window.EJS_biosUrl = '/bios/dc_bios.zip?v=' + Date.now();
       window.EJS_defaultOptions = CORE_OPTIONS;
 
       installStartGamePatch();
@@ -352,6 +445,78 @@ app.get('/api/thumbnail', (req, res) => {
 app.use('/roms', express.static(path.join(__dirname, 'roms')));
 
 
+
+// API: Get BIOS Status
+app.get('/api/bios/status', (req, res) => {
+  const biosDir = path.join(__dirname, 'bios');
+  const bootPath = path.join(biosDir, 'dc_boot.bin');
+  const flashPath = path.join(biosDir, 'dc_flash.bin');
+
+  let bootStats = { exists: false, size: 0, valid: false };
+  let flashStats = { exists: false, size: 0, valid: false };
+
+  try {
+    if (fs.existsSync(bootPath)) {
+      const s = fs.statSync(bootPath);
+      bootStats.exists = true;
+      bootStats.size = s.size;
+      // dc_boot.bin must be exactly 2,097,152 bytes (or > 1MB)
+      bootStats.valid = s.size >= 1000000;
+    }
+  } catch (e) {}
+
+  try {
+    if (fs.existsSync(flashPath)) {
+      const s = fs.statSync(flashPath);
+      flashStats.exists = true;
+      flashStats.size = s.size;
+      // dc_flash.bin must be exactly 131,072 bytes (or > 100KB)
+      flashStats.valid = s.size >= 100000;
+    }
+  } catch (e) {}
+
+  res.json({
+    dc_boot: bootStats,
+    dc_flash: flashStats,
+    ready: bootStats.valid && flashStats.valid
+  });
+});
+
+// API: Upload BIOS files
+app.post('/api/bios/upload', express.raw({ type: '*/*', limit: '10mb' }), (req, res) => {
+  const filename = req.headers['x-filename'] || '';
+  if (!filename || (filename !== 'dc_boot.bin' && filename !== 'dc_flash.bin')) {
+    return res.status(400).json({ error: 'Filename must be dc_boot.bin or dc_flash.bin' });
+  }
+
+  const biosDir = path.join(__dirname, 'bios');
+  const targetPath = path.join(biosDir, filename);
+  const dcSubdir = path.join(biosDir, 'dc', filename);
+  const dataSubdir = path.join(biosDir, 'data', filename);
+
+  try {
+    fs.mkdirSync(path.join(biosDir, 'dc'), { recursive: true });
+    fs.mkdirSync(path.join(biosDir, 'data'), { recursive: true });
+
+    fs.writeFileSync(targetPath, req.body);
+    fs.writeFileSync(dcSubdir, req.body);
+    fs.writeFileSync(dataSubdir, req.body);
+
+    // Repackage dc_bios.zip if child_process zip is available, or use node-archiver if installed
+    try {
+      const { execSync } = require('child_process');
+      execSync(`cd "${biosDir}" && zip -r dc_bios.zip dc_boot.bin dc_flash.bin dc/ data/`);
+    } catch(e) {
+      console.warn('Zip repackage warning:', e.message);
+    }
+
+    console.log(`Successfully updated BIOS file: ${filename} (${req.body.length} bytes)`);
+    res.json({ success: true, filename, size: req.body.length });
+  } catch(e) {
+    console.error('Error writing BIOS file:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // Serve EmulatorJS data and BIOS
 app.use('/data', express.static(path.join(__dirname, 'data')));
