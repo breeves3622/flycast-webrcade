@@ -362,6 +362,11 @@ app.get('/test', (req, res) => {
       window.EJS_pathtodata = '/data/';
       window.EJS_startOnLoaded = true;
       window.EJS_color = '#ff2a6d';
+      window.EJS_threads = false;
+      try {
+        localStorage.removeItem('ejs_threads');
+        localStorage.setItem('ejs_threads', 'disabled');
+      } catch(e) {}
       window.EJS_biosUrl = '/bios/dc_bios.zip?v=' + Date.now();
       window.EJS_defaultOptions = CORE_OPTIONS;
 

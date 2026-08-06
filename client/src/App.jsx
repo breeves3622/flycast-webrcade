@@ -34,15 +34,19 @@ function App() {
     window.EJS_pathtodata = '/data/';
     window.EJS_startOnLoaded = true;
     window.EJS_color = '#ff2a6d';
-    window.EJS_threads = true;
-    window.EJS_biosUrl = '/bios/dc_bios.zip?v=3';
+    window.EJS_threads = false;
+    try {
+      localStorage.removeItem('ejs_threads');
+      localStorage.setItem('ejs_threads', 'disabled');
+    } catch(e) {}
+    window.EJS_biosUrl = '/bios/dc_bios.zip?v=4';
 
     window.EJS_defaultOptions = {
       'reicast_boot_to_bios': 'disabled',
       'reicast_hle_bios': 'disabled',
       'reicast_threaded_rendering': 'disabled',
       'reicast_synchronous_rendering': 'disabled',
-      'reicast_internal_resolution': '640x480'
+      'reicast_internal_resolution': '320x240'
     };
 
     const script = document.createElement('script');
