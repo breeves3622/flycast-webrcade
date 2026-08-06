@@ -11,7 +11,7 @@ FROM node:20 AS backend
 WORKDIR /app
 
 # Invalidate cache for clean build
-ARG BUILD_REFRESH=2026-08-06-v26
+ARG BUILD_REFRESH=2026-08-06-v27
 
 # Install build tools
 RUN apt-get update && apt-get install -y curl unzip git p7zip-full zip
@@ -33,23 +33,16 @@ RUN curl -L -o /tmp/emulator.min.zip "https://cdn.emulatorjs.org/stable/data/emu
     rm /tmp/emulator.min.zip && \
     node -e "const fs = require('fs'); let c = fs.readFileSync('emulator.min.js', 'utf8'); c = c.replace('requiresWebGL2(t){return[\"ppsspp\"].includes(t)}', 'requiresWebGL2(t){return[\"ppsspp\",\"flycast\"].includes(t)}'); fs.writeFileSync('emulator.min.js', c);"
 
-# 3. Download official nasomers/flycast-wasm v1.0 release files
-RUN curl -L -o /app/server/data/cores/flycast-wasm.js "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.js" && \
-    curl -L -o /app/server/data/cores/flycast-wasm.wasm "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.wasm" && \
-    touch /app/server/data/cores/flycast-wasm.data
-
-# 4. Duplicate core into all 4 filename variations and strip module exports so window.EJS_Runtime is unconditionally set on window
-RUN cd /app/server/data/cores && \
-    cp flycast-wasm.js flycast-legacy-wasm.js && \
-    cp flycast-wasm.wasm flycast-legacy-wasm.wasm && \
-    cp flycast-wasm.data flycast-legacy-wasm.data && \
-    cp flycast-wasm.js flycast-thread-wasm.js && \
-    cp flycast-wasm.wasm flycast-thread-wasm.wasm && \
-    cp flycast-wasm.data flycast-thread-wasm.data && \
-    cp flycast-wasm.js flycast-thread-legacy-wasm.js && \
-    cp flycast-wasm.wasm flycast-thread-legacy-wasm.wasm && \
-    cp flycast-wasm.data flycast-thread-legacy-wasm.data && \
-    node -e "const fs = require('fs'); ['flycast-wasm.js', 'flycast-legacy-wasm.js', 'flycast-thread-wasm.js', 'flycast-thread-legacy-wasm.js'].forEach(file => { let c = fs.readFileSync(file, 'utf8'); c = c.replace(/if\s*\(typeof exports\s*===\s*'object'[\s\S]*$/, ''); c += '\nwindow.EJS_Runtime = EJS_Runtime;\n'; fs.writeFileSync(file, c); });"
+# 3. Build valid 7z core archives (flycast-wasm.data) containing flycast.js and flycast.wasm
+RUN curl -L -o /tmp/flycast_libretro.js "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.js" && \
+    curl -L -o /tmp/flycast.wasm "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.wasm" && \
+    node -e "const fs = require('fs'); let c = fs.readFileSync('/tmp/flycast_libretro.js', 'utf8'); c = c.replace(/if\s*\(typeof exports\s*===\s*'object'[\s\S]*$/, ''); c += '\nwindow.EJS_Runtime = EJS_Runtime;\n'; fs.writeFileSync('/tmp/flycast.js', c);" && \
+    echo '{"name":"flycast","extensions":["cdi","gdi","chd","cue","iso"],"options":{"defaultWebGL2":true}}' > /tmp/core.json && \
+    cd /tmp && \
+    7z a -t7z /app/server/data/cores/flycast-wasm.data flycast.js flycast.wasm core.json && \
+    cp /app/server/data/cores/flycast-wasm.data /app/server/data/cores/flycast-legacy-wasm.data && \
+    cp /app/server/data/cores/flycast-wasm.data /app/server/data/cores/flycast-thread-wasm.data && \
+    cp /app/server/data/cores/flycast-wasm.data /app/server/data/cores/flycast-thread-legacy-wasm.data
 
 # 5. Generate core metadata expected by EmulatorJS loader
 RUN echo '{"name":"flycast","extensions":["cdi","gdi","chd","cue","iso"],"options":{"defaultWebGL2":true}}' > /app/server/data/cores/reports/flycast.json && \
