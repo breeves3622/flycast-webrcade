@@ -470,8 +470,64 @@ app.use('/roms', express.static(path.join(__dirname, 'roms')));
 
 
 
+// Helper function to dynamically auto-detect and sync BIOS files from mounted ROM share
+function syncMountedBiosFiles() {
+  const biosDir = path.join(__dirname, 'bios');
+  const candidateDirs = [
+    path.join(__dirname, 'roms', 'bios'),
+    path.join(__dirname, 'roms')
+  ];
+
+  let updated = false;
+
+  candidateDirs.forEach(dir => {
+    ['dc_boot.bin', 'dc_flash.bin'].forEach(filename => {
+      const srcPath = path.join(dir, filename);
+      const dstPath = path.join(biosDir, filename);
+
+      try {
+        if (fs.existsSync(srcPath)) {
+          const srcStat = fs.statSync(srcPath);
+          let dstSize = 0;
+          if (fs.existsSync(dstPath)) {
+            dstSize = fs.statSync(dstPath).size;
+          }
+
+          // If destination is missing or invalid size (<100KB for flash, <1MB for boot), sync from mounted share
+          const isValidSize = filename === 'dc_boot.bin' ? srcStat.size >= 1000000 : srcStat.size >= 10000;
+          if (isValidSize && dstSize < srcStat.size) {
+            fs.mkdirSync(path.join(biosDir, 'dc'), { recursive: true });
+            fs.mkdirSync(path.join(biosDir, 'data'), { recursive: true });
+
+            fs.copyFileSync(srcPath, dstPath);
+            fs.copyFileSync(srcPath, path.join(biosDir, 'dc', filename));
+            fs.copyFileSync(srcPath, path.join(biosDir, 'data', filename));
+            console.log(`[BIOS Auto-Sync] Dynamically imported ${filename} from mounted share: ${srcPath} (${srcStat.size} bytes)`);
+            updated = true;
+          }
+        }
+      } catch(e) {
+        console.warn(`[BIOS Auto-Sync Warning] Error checking ${srcPath}:`, e.message);
+      }
+    });
+  });
+
+  if (updated) {
+    try {
+      const { execSync } = require('child_process');
+      execSync(`cd "${biosDir}" && zip -r dc_bios.zip dc_boot.bin dc_flash.bin dc/ data/`);
+      console.log('[BIOS Auto-Sync] Successfully repackaged dc_bios.zip with mounted share BIOS files!');
+    } catch(e) {
+      console.warn('[BIOS Auto-Sync Zip Warning]:', e.message);
+    }
+  }
+}
+
 // API: Get BIOS Status
 app.get('/api/bios/status', (req, res) => {
+  // First check if BIOS files are available on mounted ROM share
+  syncMountedBiosFiles();
+
   const biosDir = path.join(__dirname, 'bios');
   const bootPath = path.join(biosDir, 'dc_boot.bin');
   const flashPath = path.join(biosDir, 'dc_flash.bin');
@@ -555,4 +611,9 @@ app.use((req, res) => {
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
   console.log(`Configured for Local ROM Hosting (/app/server/roms)`);
+  try {
+    syncMountedBiosFiles();
+  } catch(e) {
+    console.warn('Initial BIOS sync error:', e.message);
+  }
 });
