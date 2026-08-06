@@ -11,7 +11,7 @@ FROM node:20 AS backend
 WORKDIR /app
 
 # Invalidate cache for clean build
-ARG BUILD_REFRESH=2026-08-06-v27
+ARG BUILD_REFRESH=2026-08-06-v28
 
 # Install build tools
 RUN apt-get update && apt-get install -y curl unzip git p7zip-full zip
@@ -36,7 +36,7 @@ RUN curl -L -o /tmp/emulator.min.zip "https://cdn.emulatorjs.org/stable/data/emu
 # 3. Build valid 7z core archives (flycast-wasm.data) containing flycast.js and flycast.wasm
 RUN curl -L -o /tmp/flycast_libretro.js "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.js" && \
     curl -L -o /tmp/flycast.wasm "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.wasm" && \
-    node -e "const fs = require('fs'); let c = fs.readFileSync('/tmp/flycast_libretro.js', 'utf8'); c = c.replace(/if\s*\(typeof exports\s*===\s*'object'[\s\S]*$/, ''); c += '\nwindow.EJS_Runtime = EJS_Runtime;\n'; fs.writeFileSync('/tmp/flycast.js', c);" && \
+    node -e "const fs = require('fs'); let c = fs.readFileSync('/tmp/flycast_libretro.js', 'utf8'); c = c.replace(/if\s*\(typeof exports\s*===\s*'object'[\s\S]*$/, ''); c = c.replace('ctx.audioWorklet.addModule', 'if(!ctx.audioWorklet) ctx.audioWorklet = { addModule: () => Promise.reject() }; ctx.audioWorklet.addModule'); c += '\nwindow.EJS_Runtime = EJS_Runtime;\n'; fs.writeFileSync('/tmp/flycast.js', c);" && \
     echo '{"name":"flycast","extensions":["cdi","gdi","chd","cue","iso"],"options":{"defaultWebGL2":true}}' > /tmp/core.json && \
     cd /tmp && \
     7z a -t7z /app/server/data/cores/flycast-wasm.data flycast.js flycast.wasm core.json && \

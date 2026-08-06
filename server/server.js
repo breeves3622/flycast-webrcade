@@ -151,6 +151,25 @@ app.get('/test', (req, res) => {
         return ctx;
       };
     })();
+
+    // AudioWorklet polyfill for HTTP origins (where AudioContext.audioWorklet is undefined)
+    (function() {
+      var origAudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (origAudioCtx) {
+        var PatchedAudioContext = function() {
+          var ctx = new origAudioCtx(arguments[0]);
+          if (!ctx.audioWorklet) {
+            ctx.audioWorklet = {
+              addModule: function() { return Promise.reject(new Error('AudioWorklet disabled on HTTP')); }
+            };
+          }
+          return ctx;
+        };
+        PatchedAudioContext.prototype = origAudioCtx.prototype;
+        window.AudioContext = PatchedAudioContext;
+        if (window.webkitAudioContext) window.webkitAudioContext = PatchedAudioContext;
+      }
+    })();
   </script>
 </head>
 <body>
