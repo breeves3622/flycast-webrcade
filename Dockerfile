@@ -11,7 +11,7 @@ FROM node:20 AS backend
 WORKDIR /app
 
 # Invalidate cache for clean build
-ARG BUILD_REFRESH=2026-08-06-v24
+ARG BUILD_REFRESH=2026-08-06-v25
 
 # Install build tools
 RUN apt-get update && apt-get install -y curl unzip git p7zip-full zip
@@ -38,7 +38,7 @@ RUN curl -L -o /app/server/data/cores/flycast-wasm.js "https://github.com/nasome
     curl -L -o /app/server/data/cores/flycast-wasm.wasm "https://github.com/nasomers/flycast-wasm/releases/download/v1.0/flycast_libretro.wasm" && \
     touch /app/server/data/cores/flycast-wasm.data
 
-# 4. Duplicate core into all 4 filename variations and insert window.EJS_Runtime = EJS_Runtime at true end of IIFE
+# 4. Duplicate core into all 4 filename variations and strip module exports so window.EJS_Runtime is unconditionally set on window
 RUN cd /app/server/data/cores && \
     cp flycast-wasm.js flycast-legacy-wasm.js && \
     cp flycast-wasm.wasm flycast-legacy-wasm.wasm && \
@@ -49,7 +49,7 @@ RUN cd /app/server/data/cores && \
     cp flycast-wasm.js flycast-thread-legacy-wasm.js && \
     cp flycast-wasm.wasm flycast-thread-legacy-wasm.wasm && \
     cp flycast-wasm.data flycast-thread-legacy-wasm.data && \
-    node -e "const fs = require('fs'); ['flycast-wasm.js', 'flycast-legacy-wasm.js', 'flycast-thread-wasm.js', 'flycast-thread-legacy-wasm.js'].forEach(file => { let c = fs.readFileSync(file, 'utf8'); const idx = c.lastIndexOf('})();'); c = c.slice(0, idx + 5) + '\nwindow.EJS_Runtime = EJS_Runtime;\n' + c.slice(idx + 5); fs.writeFileSync(file, c); });"
+    node -e "const fs = require('fs'); ['flycast-wasm.js', 'flycast-legacy-wasm.js', 'flycast-thread-wasm.js', 'flycast-thread-legacy-wasm.js'].forEach(file => { let c = fs.readFileSync(file, 'utf8'); c = c.replace(/if\s*\(typeof exports\s*===\s*'object'[\s\S]*$/, ''); c += '\nwindow.EJS_Runtime = EJS_Runtime;\n'; fs.writeFileSync(file, c); });"
 
 # 5. Generate core metadata expected by EmulatorJS loader
 RUN echo '{"name":"flycast","extensions":["cdi","gdi","chd","cue","iso"],"options":{"defaultWebGL2":true}}' > /app/server/data/cores/reports/flycast.json && \
